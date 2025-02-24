@@ -31,6 +31,7 @@ function createClient() {
     const fattyRegex = new RE2('\\bfatty\\b');
     const yourMomRegex = new RE2('\\byour mom\\b');
     const urMomRegex = new RE2('\\bur mom\\b');
+    const ermRegex = new RE2('\\berm+\\b');
 
     console.log(`Testing regex patterns against message content...`);
     if (urMomRegex.test(content_lower) || yourMomRegex.test(content_lower) || fatRegex.test(content_lower) || fatassRegex.test(content_lower) || fattyRegex.test(content_lower)) {
@@ -39,7 +40,15 @@ function createClient() {
       message.channel.send('https://tenor.com/view/berserk-skeleton-damn-bro-you-gif-25852196')
         .then(() => console.log('Response sent successfully'))
         .catch(error => console.error('Error sending response:', error));
-    } else {
+    }
+    else if (ermRegex.test(content_lower)) {
+      bot_active = true;
+      console.log('Matched a keyword, sending response');
+      message.channel.send('https://tenor.com/view/omori-erm-uuuh-uhh-huh-gif-15238876008948972055')
+        .then(() => console.log('Response sent successfully'))
+        .catch(error => console.error('Error sending response:', error));
+    }
+    else {
       bot_active = false;
       console.log('No keyword matched');
     }
