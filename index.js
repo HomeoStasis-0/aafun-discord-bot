@@ -29,9 +29,11 @@ function createClient() {
     const fatRegex = new RE2('\\bfat\\b');
     const fatassRegex = new RE2('\\bfatass\\b');
     const fattyRegex = new RE2('\\bfatty\\b');
+    const yourMomRegex = new RE2('\\your mom\\b');
+    const urMomRegex = new RE2('\\ur mom\\b');
 
     console.log(`Testing regex patterns against message content...`);
-    if (fatRegex.test(content_lower) || fatassRegex.test(content_lower) || fattyRegex.test(content_lower)) {
+    if (urMomRegex.test(content_lower) || yourMomRegex.test(content_lower) || fatRegex.test(content_lower) || fatassRegex.test(content_lower) || fattyRegex.test(content_lower)) {
       bot_active = true;
       console.log('Matched a keyword, sending response');
       message.channel.send('https://tenor.com/view/berserk-skeleton-damn-bro-you-gif-25852196')
