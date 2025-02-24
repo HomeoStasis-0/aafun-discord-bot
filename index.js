@@ -47,7 +47,6 @@ function createClient() {
       console.log('Bot is active');
     } else {
       console.log('Bot is inactive');
-      client.destroy();
     }
   });
 }
@@ -60,32 +59,6 @@ function loginBot() {
     .catch(error => console.error('Error logging in:', error));
 }
 
-// Function to check messages and log in the bot if keywords are detected
-function checkMessagesAndLogin() {
-  const tempClient = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
-  });
-
-  tempClient.on('messageCreate', message => {
-    if (message.author.id === tempClient.user.id) {
-      return;
-    }
-
-    const content_lower = message.content.toLowerCase();
-    const fatRegex = new RE2('\\bfat\\b');
-    const fatassRegex = new RE2('\\bfatass\\b');
-    const fattyRegex = new RE2('\\bfatty\\b');
-
-    if (fatRegex.test(content_lower) || fatassRegex.test(content_lower) || fattyRegex.test(content_lower)) {
-      tempClient.destroy();
-      loginBot();
-    }
-  });
-
-  tempClient.login(process.env.DISCORD_TOKEN)
-    .catch(error => console.error('Error logging in temp client:', error));
-}
-
 // Create a simple HTTP server to prevent Heroku boot timeout
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
@@ -95,5 +68,5 @@ http.createServer((req, res) => {
   console.log(`Server is listening on port ${PORT}`);
 });
 
-// Initial check for messages
-checkMessagesAndLogin();
+// Initial login attempt
+loginBot();
