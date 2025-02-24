@@ -42,10 +42,18 @@ client.on('messageCreate', message => {
   if (bot_active) {
     // Add any additional functionality here when the bot is active
     console.log('Bot is active');
+  } else {
+    console.log('Bot is inactive');
+    client.destroy();
   }
 });
 
-// Use environment variable for the token
-client.login(process.env.DISCORD_TOKEN)
-  .then(() => console.log('Logged in successfully'))
-  .catch(error => console.error('Error logging in:', error));
+// Function to log in the bot
+function loginBot() {
+  client.login(process.env.DISCORD_TOKEN)
+    .then(() => console.log('Logged in successfully'))
+    .catch(error => console.error('Error logging in:', error));
+}
+
+// Initial login attempt
+loginBot();
