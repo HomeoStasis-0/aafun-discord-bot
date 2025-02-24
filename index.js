@@ -29,8 +29,8 @@ function createClient() {
     const fatRegex = new RE2('\\bfat\\b');
     const fatassRegex = new RE2('\\bfatass\\b');
     const fattyRegex = new RE2('\\bfatty\\b');
-    const yourMomRegex = new RE2('\\your mom\\b');
-    const urMomRegex = new RE2('\\ur mom\\b');
+    const yourMomRegex = new RE2('\\byour mom\\b');
+    const urMomRegex = new RE2('\\bur mom\\b');
 
     console.log(`Testing regex patterns against message content...`);
     if (urMomRegex.test(content_lower) || yourMomRegex.test(content_lower) || fatRegex.test(content_lower) || fatassRegex.test(content_lower) || fattyRegex.test(content_lower)) {
