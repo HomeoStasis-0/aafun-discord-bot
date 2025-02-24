@@ -1,28 +1,51 @@
-const express = require('express')
-const path = require('path')
+require('dotenv').config();
+const { Client, GatewayIntentBits } = require('discord.js');
+const RE2 = require('re2');
 
-const port = process.env.PORT || 5006
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
+});
 
-const app = express()
+let bot_active = false;  // Global variable to track bot's active state
 
-app.use(express.static(path.join(__dirname, 'public')))
-app.set('views', path.join(__dirname, 'views'))
-app.set('view engine', 'ejs')
+client.on('ready', () => {
+  console.log(`We have logged in as ${client.user.tag}`);
+});
 
-app.get('/', (req, res) => {
-  console.log(`Rendering 'pages/index' for route '/'`)
-  res.render('pages/index')
-})
+client.on('messageCreate', message => {
+  console.log(`Received message: ${message.content}`);  // Log received messages
 
-const server = app.listen(port, () => {
-  console.log(`Listening on ${port}`)
-})
-
-process.on('SIGTERM', async () => {
-  console.log('SIGTERM signal received: gracefully shutting down')
-  if (server) {
-    server.close(() => {
-      console.log('HTTP server closed')
-    })
+  if (message.author.id === client.user.id) {
+    console.log('Ignoring message from the bot itself');
+    return;
   }
-})
+
+  const content_lower = message.content.toLowerCase();
+  console.log(`Message content in lowercase: ${content_lower}`);
+
+  const fatRegex = new RE2('\\bfat\\b');
+  const fatassRegex = new RE2('\\bfatass\\b');
+  const fattyRegex = new RE2('\\bfatty\\b');
+
+  console.log(`Testing regex patterns against message content...`);
+  if (fatRegex.test(content_lower) || fatassRegex.test(content_lower) || fattyRegex.test(content_lower)) {
+    bot_active = true;
+    console.log('Matched a keyword, sending response');
+    message.channel.send('https://tenor.com/view/berserk-skeleton-damn-bro-you-gif-25852196')
+      .then(() => console.log('Response sent successfully'))
+      .catch(error => console.error('Error sending response:', error));
+  } else {
+    bot_active = false;
+    console.log('No keyword matched');
+  }
+
+  if (bot_active) {
+    // Add any additional functionality here when the bot is active
+    console.log('Bot is active');
+  }
+});
+
+// Use environment variable for the token
+client.login(process.env.DISCORD_TOKEN)
+  .then(() => console.log('Logged in successfully'))
+  .catch(error => console.error('Error logging in:', error));
