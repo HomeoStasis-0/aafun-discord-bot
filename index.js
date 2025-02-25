@@ -61,11 +61,26 @@ function createClient() {
     }
     else if (cumRegex.test(content_lower)) {
       bot_active = true;
-      console.log('Matched a keyword, sending response');
-      message.channel.send('https://tenor.com/view/anime-magic-senpai-magic-sempai-tejina-senpai-jizz-hands-gif-15061965')
+      console.log('Matched a keyword, sending a random response');
+    
+      // Array of GIF URLs
+      const cumGifs = [
+        'https://tenor.com/view/anime-magic-senpai-magic-sempai-tejina-senpai-jizz-hands-gif-15061965',
+        'https://tenor.com/view/todo-clap-orgasm-daddy-yes-boogie-woogie-gif-21117228',
+        'https://tenor.com/view/nut-orgasm-catgirl-anime-nyanners-gif-24080350',
+        'https://tenor.com/view/hehehe-creepy-lovely-excited-orgasm-gif-15541428',
+        'https://tenor.com/view/anime-watamote-orgasm-twitch-gif-23286923'
+      ];
+    
+      // Select a random GIF from the array
+      const randomGif = cumGifs[Math.floor(Math.random() * cumGifs.length)];
+    
+      // Send the selected GIF
+      message.channel.send(randomGif)
         .then(() => console.log('Response sent successfully'))
         .catch(error => console.error('Error sending response:', error));
     }
+    
     else if (glorpshitRegex.test(content_lower)) {
       bot_active = true
       console.log('Matched a keyword, sending response');
