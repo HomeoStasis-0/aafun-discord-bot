@@ -52,7 +52,7 @@ function createClient() {
     else if (guhRegex.test(content_lower)) {
       bot_active = true;
       console.log('Matched a keyword, sending response');
-      message.channel.send('https://tenor.com/view/omori-erm-uuuh-uhh-huh-gif-15238876008948972055')
+      message.channel.send('https://tenor.com/view/guh-gif-25116077')
         .then(() => console.log('Response sent successfully'))
         .catch(error => console.error('Error sending response:', error));
     }
