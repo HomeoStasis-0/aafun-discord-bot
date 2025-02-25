@@ -34,6 +34,7 @@ function createClient() {
     const ermRegex = new RE2('\\berm+\\b');
     const guhRegex = new RE2('\\bguh+\\b');
     const cumRegex = new RE2('\\b(cum|cums|cumming|bust|busting|busted|cream|creams|creaming|creamed)\\b', 'i');
+    const glorpshitRegex = new RE2('\\bglorpshit\\b');
 
 
     console.log(`Testing regex patterns against message content...`);
@@ -65,6 +66,14 @@ function createClient() {
         .then(() => console.log('Response sent successfully'))
         .catch(error => console.error('Error sending response:', error));
     }
+    else if (glorpshitRegex.test(content_lower)) {
+      bot_active = true
+      console.log('Matched a keyword, sending response');
+      message.channel.send('https://tenor.com/view/glorp-glorpshit-mad-gif-12826934952903770254')
+        .then(() => console.log('Response sent successfully'))
+        .catch(error => console.error('Error sending response:', error));
+    }
+
     else {
       bot_active = false;
       console.log('No keyword matched');
