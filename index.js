@@ -33,6 +33,7 @@ function createClient() {
     const urMomRegex = new RE2('\\bur mom\\b');
     const ermRegex = new RE2('\\berm+\\b');
     const guhRegex = new RE2('\\bguh+\\b');
+    const cumRegex = new RE2('\\bcum\\b');
 
     console.log(`Testing regex patterns against message content...`);
     if (urMomRegex.test(content_lower) || yourMomRegex.test(content_lower) || fatRegex.test(content_lower) || fatassRegex.test(content_lower) || fattyRegex.test(content_lower)) {
@@ -55,6 +56,13 @@ function createClient() {
       message.channel.send('https://tenor.com/view/guh-gif-25116077')
         .then(() => console.log('Response sent successfully'))
         .catch(error => console.error('Error sending response:', error));
+    }
+    else if (cumRegex.test(content_lower)) {
+      bot_active = true;
+      console.log('Matched a keyword, sending response');
+      message.channel.send('https://tenor.com/view/anime-magic-senpai-magic-sempai-tejina-senpai-jizz-hands-gif-15061965')
+      .then(() => console.log('Response sent successfully'))
+      .catch(error => console.error('Error sending response:', error));
     }
     else {
       bot_active = false;
