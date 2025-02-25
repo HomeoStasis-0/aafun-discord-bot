@@ -32,6 +32,7 @@ function createClient() {
     const yourMomRegex = new RE2('\\byour mom\\b');
     const urMomRegex = new RE2('\\bur mom\\b');
     const ermRegex = new RE2('\\berm+\\b');
+    const guhRegex = new RE2('\\bguh+\\b');
 
     console.log(`Testing regex patterns against message content...`);
     if (urMomRegex.test(content_lower) || yourMomRegex.test(content_lower) || fatRegex.test(content_lower) || fatassRegex.test(content_lower) || fattyRegex.test(content_lower)) {
@@ -42,6 +43,13 @@ function createClient() {
         .catch(error => console.error('Error sending response:', error));
     }
     else if (ermRegex.test(content_lower)) {
+      bot_active = true;
+      console.log('Matched a keyword, sending response');
+      message.channel.send('https://tenor.com/view/omori-erm-uuuh-uhh-huh-gif-15238876008948972055')
+        .then(() => console.log('Response sent successfully'))
+        .catch(error => console.error('Error sending response:', error));
+    }
+    else if (guhRegex.test(content_lower)) {
       bot_active = true;
       console.log('Matched a keyword, sending response');
       message.channel.send('https://tenor.com/view/omori-erm-uuuh-uhh-huh-gif-15238876008948972055')
