@@ -69,7 +69,9 @@ function createClient() {
         'https://tenor.com/view/todo-clap-orgasm-daddy-yes-boogie-woogie-gif-21117228',
         'https://tenor.com/view/nut-orgasm-catgirl-anime-nyanners-gif-24080350',
         'https://tenor.com/view/hehehe-creepy-lovely-excited-orgasm-gif-15541428',
-        'https://tenor.com/view/anime-watamote-orgasm-twitch-gif-23286923'
+        'https://tenor.com/view/anime-watamote-orgasm-twitch-gif-23286923',
+        'https://tenor.com/view/catgirl-nekomimi-sexy-anime-gif-20620042',
+        'https://tenor.com/view/kiss-anime-gif-25489406'
       ];
     
       // Select a random GIF from the array
