@@ -62,8 +62,14 @@ function createClient() {
       bot_active = true;
       console.log('Matched a keyword, sending response');
       message.channel.send('https://tenor.com/view/guh-gif-25116077')
-        .then(() => console.log('Response sent successfully'))
-        .catch(error => console.error('Error sending response:', error));
+      .then(msg => {
+        console.log('Response sent successfully');
+        setTimeout(() => {
+          msg.delete()
+            .then(() => console.log('Response deleted'))
+            .catch(error => console.error('Error deleting response:', error));
+        }, 5000);
+      })
     }
     // else if (cumRegex.test(content_lower)) {
     //   bot_active = true;
@@ -91,8 +97,14 @@ function createClient() {
       bot_active = true
       console.log('Matched a keyword, sending response');
       message.channel.send('https://tenor.com/view/glorp-glorpshit-mad-gif-12826934952903770254')
-        .then(() => console.log('Response sent successfully'))
-        .catch(error => console.error('Error sending response:', error));
+      .then(msg => {
+        console.log('Response sent successfully');
+        setTimeout(() => {
+          msg.delete()
+            .then(() => console.log('Response deleted'))
+            .catch(error => console.error('Error deleting response:', error));
+        }, 5000);
+      })
     }
 
     else {
