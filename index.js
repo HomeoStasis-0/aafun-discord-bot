@@ -23,64 +23,76 @@ function createClient() {
     console.log(`We have logged in as ${client.user.tag}`);
   });
 
-  const chatMemory = {}; // Stores chat history per user
+  const chatMemory = {}; 
 
   client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
-
+  
     if (interaction.commandName === 'chat') {
       const userMessage = interaction.options.getString('message');
       await interaction.deferReply();
-
+  
       try {
         const userId = interaction.user.id;
-
-        // Initialize memory for user if it doesn't exist
+  
         if (!chatMemory[userId]) {
           chatMemory[userId] = [];
         }
-
-        // Check for name-related queries first
+  
+        // Convert message to lowercase for case-insensitive comparison
+        const lowerMessage = userMessage.toLowerCase();
+  
+        // Predefined responses
         if (
-          userMessage.includes("what's your name") ||
-          userMessage.includes("what is your name") ||
-          userMessage.includes("who are you") ||
-          userMessage.includes("your name") ||
-          userMessage.includes("who you are")
+          lowerMessage.includes("what's your name") ||
+          lowerMessage.includes("what is your name") ||
+          lowerMessage.includes("who are you") ||
+          lowerMessage.includes("your name") ||
+          lowerMessage.includes("who you are")
         ) {
           await interaction.editReply(`My name is ${client.user.username}!`);
           return;
         }
-
+  
         const userNickname = interaction.member?.nickname || interaction.user.username;
         if (
-          userMessage.includes("what's my name") ||
-          userMessage.includes("what is my name") ||
-          userMessage.includes("who am i")
+          lowerMessage.includes("what's my name") ||
+          lowerMessage.includes("what is my name") ||
+          lowerMessage.includes("who am i")
         ) {
           await interaction.editReply(`Your name is ${userNickname}!`);
           return;
         }
-
-        // Add user message to memory
-        chatMemory[userId].push({ role: "user", content: userMessage });
-
-        // Keep history within a limit (e.g., last 10 messages)
-        if (chatMemory[userId].length > 10) {
-          chatMemory[userId].shift(); // Remove oldest message
+  
+        // Custom response for "who is your father"
+        if (
+          lowerMessage.includes("who is your father") ||
+          lowerMessage.includes("who's your father") ||
+          lowerMessage.includes("who is your dad") ||
+          lowerMessage.includes("who's your dad")
+        ) {
+          await interaction.editReply("My father is Javi, also known as 𝓯𝓻𝓮𝓪𝓴𝔂.");
+          return;
         }
-
-        // Generate response using memory
+  
+        // Store message in user memory
+        chatMemory[userId].push({ role: "user", content: userMessage });
+  
+        if (chatMemory[userId].length > 10) {
+          chatMemory[userId].shift();
+        }
+  
+        // Get AI response with memory
         const response = await groq.chat.completions.create({
           model: "llama-3.3-70b-versatile",
-          messages: chatMemory[userId], // Pass entire conversation history
+          messages: chatMemory[userId],
         });
-
+  
         const reply = response.choices[0]?.message?.content || "Sorry, I couldn't process that request.";
-
-        // Add bot response to memory
+  
+        // Store bot's response in memory
         chatMemory[userId].push({ role: "assistant", content: reply });
-
+  
         await interaction.editReply(reply);
       } catch (error) {
         console.error('Error fetching AI response:', error.response?.data || error.message);
@@ -88,7 +100,7 @@ function createClient() {
       }
     }
   });
-
+  
 
   client.on('messageCreate', message => {
     console.log(`Received message: ${message.content}`);  // Log received messages
