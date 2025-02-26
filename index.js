@@ -26,16 +26,15 @@ function createClient() {
   client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
-    if (userMessage.includes("what's your name") || userMessage.includes("what is your name") || userMessage.includes("who are you")) {
-      await interaction.editReply(`My name is ${client.user.username}!`);
-      return;
-    }
-
     if (interaction.commandName === 'chat') {
       const userMessage = interaction.options.getString('message');
       await interaction.deferReply();
 
       try {
+        if (userMessage.includes("what's your name") || userMessage.includes("what is your name") || userMessage.includes("who are you") || userMessage.includes("your name") || userMessage.includes("who you are")) {
+          await interaction.editReply(`My name is ${client.user.username}!`);
+          return;
+        }
         const response = await groq.chat.completions.create({
           model: "llama-3.3-70b-versatile",
           messages: [{ role: "user", content: userMessage }],
