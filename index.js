@@ -23,6 +23,8 @@ function createClient() {
     console.log(`We have logged in as ${client.user.tag}`);
   });
 
+  const chatMemory = {}; // Stores chat history per user
+
   client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
@@ -31,21 +33,54 @@ function createClient() {
       await interaction.deferReply();
 
       try {
-        if (userMessage.includes("what's your name") || userMessage.includes("what is your name") || userMessage.includes("who are you") || userMessage.includes("your name") || userMessage.includes("who you are")) {
+        const userId = interaction.user.id;
+
+        // Initialize memory for user if it doesn't exist
+        if (!chatMemory[userId]) {
+          chatMemory[userId] = [];
+        }
+
+        // Check for name-related queries first
+        if (
+          userMessage.includes("what's your name") ||
+          userMessage.includes("what is your name") ||
+          userMessage.includes("who are you") ||
+          userMessage.includes("your name") ||
+          userMessage.includes("who you are")
+        ) {
           await interaction.editReply(`My name is ${client.user.username}!`);
           return;
         }
+
         const userNickname = interaction.member?.nickname || interaction.user.username;
-        if (userMessage.includes("what's my name") || userMessage.includes("what is my name") || userMessage.includes("who am i")) {
+        if (
+          userMessage.includes("what's my name") ||
+          userMessage.includes("what is my name") ||
+          userMessage.includes("who am i")
+        ) {
           await interaction.editReply(`Your name is ${userNickname}!`);
           return;
         }
+
+        // Add user message to memory
+        chatMemory[userId].push({ role: "user", content: userMessage });
+
+        // Keep history within a limit (e.g., last 10 messages)
+        if (chatMemory[userId].length > 10) {
+          chatMemory[userId].shift(); // Remove oldest message
+        }
+
+        // Generate response using memory
         const response = await groq.chat.completions.create({
           model: "llama-3.3-70b-versatile",
-          messages: [{ role: "user", content: userMessage }],
+          messages: chatMemory[userId], // Pass entire conversation history
         });
 
         const reply = response.choices[0]?.message?.content || "Sorry, I couldn't process that request.";
+
+        // Add bot response to memory
+        chatMemory[userId].push({ role: "assistant", content: reply });
+
         await interaction.editReply(reply);
       } catch (error) {
         console.error('Error fetching AI response:', error.response?.data || error.message);
@@ -53,6 +88,7 @@ function createClient() {
       }
     }
   });
+
 
   client.on('messageCreate', message => {
     console.log(`Received message: ${message.content}`);  // Log received messages
