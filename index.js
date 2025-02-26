@@ -35,8 +35,9 @@ function createClient() {
           await interaction.editReply(`My name is ${client.user.username}!`);
           return;
         }
+        const userNickname = interaction.member?.nickname || interaction.user.username;
         if (userMessage.includes("what's my name") || userMessage.includes("what is my name") || userMessage.includes("who am i")) {
-          await interaction.editReply(`Your name is ${interaction.user.username}!`);
+          await interaction.editReply(`Your name is ${userNickname}!`);
           return;
         }
         const response = await groq.chat.completions.create({
