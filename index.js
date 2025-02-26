@@ -1,8 +1,11 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { Client, GatewayIntentBits } = require('discord.js');
 const RE2 = require('re2');
 const http = require('http');
 const axios = require('axios');
+const Groq = require('groq-sdk');
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 let client;
 let bot_active = false;
@@ -24,17 +27,12 @@ function createClient() {
       await interaction.deferReply();
 
       try {
-        const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-          model: "gpt-4o-mini",
-          messages: [{ role: "user", content: userMessage }]
-        }, {
-          headers: {
-            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-            'Content-Type': 'application/json'
-          }
+        const response = await groq.chat.completions.create({
+          model: "llama-3.3-70b-versatile",
+          messages: [{ role: "user", content: userMessage }],
         });
 
-        const reply = response.data.choices[0].message.content;
+        const reply = response.choices[0]?.message?.content || "Sorry, I couldn't process that request.";
         await interaction.editReply(reply);
       } catch (error) {
         console.error('Error fetching AI response:', error.response?.data || error.message);
