@@ -12,26 +12,31 @@ function createClient() {
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
   });
 
-  client.on('ready', async () => {
-    console.log(`We have logged in as ${client.user.tag}`);
-
-    // Register slash commands
-    const commands = [
-      new SlashCommandBuilder()
-        .setName('chat')
-        .setDescription('Chat with the bot')
-        .addStringOption(option =>
-          option.setName('message')
-            .setDescription('Your message to the bot')
-            .setRequired(true))
-    ].map(command => command.toJSON());
-
-    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-    try {
-      await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-      console.log('Successfully registered slash commands.');
-    } catch (error) {
-      console.error('Error registering commands:', error);
+  // Slash command for chatting with the bot
+  client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+  
+    if (interaction.commandName === 'chat') {
+      const userMessage = interaction.options.getString('message');
+      await interaction.deferReply();
+  
+      try {
+        const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+          model: "gpt-3.5-turbo",
+          messages: [{ role: "user", content: userMessage }]
+        }, {
+          headers: {
+            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        });
+  
+        const reply = response.data.choices[0].message.content;
+        await interaction.editReply(reply);
+      } catch (error) {
+        console.error('Error fetching AI response:', error);
+        await interaction.editReply("Sorry, I couldn't process that request.");
+      }
     }
   });
 
