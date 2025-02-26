@@ -35,6 +35,10 @@ function createClient() {
           await interaction.editReply(`My name is ${client.user.username}!`);
           return;
         }
+        if (userMessage.includes("what's my name") || userMessage.includes("what is my name") || userMessage.includes("who am i")) {
+          await interaction.editReply(`Your name is ${interaction.user.username}!`);
+          return;
+        }
         const response = await groq.chat.completions.create({
           model: "llama-3.3-70b-versatile",
           messages: [{ role: "user", content: userMessage }],
