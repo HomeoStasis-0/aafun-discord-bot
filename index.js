@@ -19,48 +19,23 @@ function createClient() {
     ]
   });
 
-  client.on('interactionCreate', async interaction => {
-    if (!interaction.isChatInputCommand()) return;
-
-    if (interaction.commandName === 'chat') {
-      const userMessage = interaction.options.getString('message');
-      await interaction.deferReply();
-
-      try {
-        const response = await groq.chat.completions.create({
-          model: "llama-3.3-70b-versatile",
-          messages: [{ role: "user", content: userMessage }],
-        });
-
-        const reply = response.choices[0]?.message?.content || "Sorry, I couldn't process that request.";
-        await interaction.editReply(reply);
-      } catch (error) {
-        console.error('Error fetching AI response:', error.response?.data || error.message);
-        await interaction.editReply("Sorry, I couldn't process that request.");
-      }
-    }
-  });
-  
-function createClient() {
-  client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
-  });
-
   client.on('ready', () => {
     console.log(`We have logged in as ${client.user.tag}`);
   });
 
-
   client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
+
     if (interaction.commandName === 'chat') {
       const userMessage = interaction.options.getString('message');
       await interaction.deferReply();
+
       try {
         const response = await groq.chat.completions.create({
           model: "llama-3.3-70b-versatile",
           messages: [{ role: "user", content: userMessage }],
         });
+
         const reply = response.choices[0]?.message?.content || "Sorry, I couldn't process that request.";
         await interaction.editReply(reply);
       } catch (error) {
@@ -81,27 +56,14 @@ function createClient() {
     const content_lower = message.content.toLowerCase();
     console.log(`Message content in lowercase: ${content_lower}`);
 
-    // const fatRegex = new RE2('\\bfat\\b');
-    // const fatassRegex = new RE2('\\bfatass\\b');
-    // const fattyRegex = new RE2('\\bfatty\\b');
-    // const yourMomRegex = new RE2('\\byour mom\\b');
-    // const urMomRegex = new RE2('\\bur mom\\b');
     const ermRegex = new RE2('\\berm+\\b');
     const guhRegex = new RE2('\\bguh+\\b');
-    // const cumRegex = new RE2('\\b(cum|cums|cumming|bust|busting|busted|cream|creams|creaming|creamed)\\b', 'i');
     const glorpshitRegex = new RE2('\\bglorpshit\\b');
     const meowRegex = new RE2('\\bmeow\\b');
     const femboyRegex = new RE2('\\bfemboy\\b');
 
-
     console.log(`Testing regex patterns against message content...`);
-    // if (urMomRegex.test(content_lower) || yourMomRegex.test(content_lower) || fatRegex.test(content_lower) || fatassRegex.test(content_lower) || fattyRegex.test(content_lower)) {
-    //   bot_active = true;
-    //   console.log('Matched a keyword, sending response');
-    //   message.channel.send('https://tenor.com/view/berserk-skeleton-damn-bro-you-gif-25852196')
-    //     .then(() => console.log('Response sent successfully'))
-    //     .catch(error => console.error('Error sending response:', error));
-    // }
+
     if (ermRegex.test(content_lower)) {
       bot_active = true;
       console.log('Matched a keyword, sending response');
@@ -128,28 +90,6 @@ function createClient() {
         }, 5000);
       })
     }
-    // else if (cumRegex.test(content_lower)) {
-    //   bot_active = true;
-    //   console.log('Matched a keyword, sending a random response');
-    
-    //   // Array of GIF URLs
-    //   const cumGifs = [
-    //     'https://tenor.com/view/anime-magic-senpai-magic-sempai-tejina-senpai-jizz-hands-gif-15061965',
-    //     'https://tenor.com/view/todo-clap-orgasm-daddy-yes-boogie-woogie-gif-21117228',
-    //     'https://tenor.com/view/nut-orgasm-catgirl-anime-nyanners-gif-24080350',
-    //     'https://tenor.com/view/hehehe-creepy-lovely-excited-orgasm-gif-15541428',
-    //     'https://tenor.com/view/anime-watamote-orgasm-twitch-gif-23286923',
-    //     'https://tenor.com/view/catgirl-nekomimi-sexy-anime-gif-20620042',
-    //     'https://tenor.com/view/kiss-anime-gif-25489406'
-    //   ];
-    
-    //   const randomGif = cumGifs[Math.floor(Math.random() * cumGifs.length)];
-    
-    //   message.channel.send(randomGif)
-    //     .then(() => console.log('Response sent successfully'))
-    //     .catch(error => console.error('Error sending response:', error));
-    // }
-    
     else if (glorpshitRegex.test(content_lower)) {
       bot_active = true
       console.log('Matched a keyword, sending response');
@@ -202,14 +142,12 @@ function createClient() {
         }, 5000);
       })
     }
-
     else {
       bot_active = false;
       console.log('No keyword matched');
     }
 
     if (bot_active) {
-      // Add any additional functionality here when the bot is active
       console.log('Bot is active');
     } else {
       console.log('Bot is inactive');
