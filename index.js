@@ -35,6 +35,7 @@ function createClient() {
     const guhRegex = new RE2('\\bguh+\\b');
     // const cumRegex = new RE2('\\b(cum|cums|cumming|bust|busting|busted|cream|creams|creaming|creamed)\\b', 'i');
     const glorpshitRegex = new RE2('\\bglorpshit\\b');
+    const meowRegex = new RE2('\\bmeow\\b');
 
 
     console.log(`Testing regex patterns against message content...`);
@@ -97,6 +98,19 @@ function createClient() {
       bot_active = true
       console.log('Matched a keyword, sending response');
       message.channel.send('https://tenor.com/view/glorp-glorpshit-mad-gif-12826934952903770254')
+      .then(msg => {
+        console.log('Response sent successfully');
+        setTimeout(() => {
+          msg.delete()
+            .then(() => console.log('Response deleted'))
+            .catch(error => console.error('Error deleting response:', error));
+        }, 5000);
+      })
+    }
+    else if (meowRegex.test(content_lower) && message.author.username == "lyxchee") {
+      bot_active = true
+      console.log('Matched a keyword, sending response');
+      message.channel.send('https://tenor.com/view/larry-larry-cat-chat-larry-meme-chat-meme-cat-gif-10061556685042597078')
       .then(msg => {
         console.log('Response sent successfully');
         setTimeout(() => {
