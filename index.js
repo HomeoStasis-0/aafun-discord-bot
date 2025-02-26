@@ -120,6 +120,19 @@ function createClient() {
         }, 5000);
       })
     }
+    else if (meowRegex.test(content_lower)) {
+      bot_active = true
+      console.log('Matched a keyword, sending response');
+      message.channel.send('https://tenor.com/view/big-poo-big-poo-cat-big-poo-cat-gif-8095478642247689280')
+      .then(msg => {
+        console.log('Response sent successfully');
+        setTimeout(() => {
+          msg.delete()
+            .then(() => console.log('Response deleted'))
+            .catch(error => console.error('Error deleting response:', error));
+        }, 5000);
+      })
+    }
 
     else {
       bot_active = false;
