@@ -19,19 +19,20 @@ function createClient() {
     ]
   });
 
+  client.on('ready', () => {
+    console.log(`Logged in as ${client.user.tag}`);
+  });
+
   client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
-
     if (interaction.commandName === 'chat') {
       const userMessage = interaction.options.getString('message');
       await interaction.deferReply();
-
       try {
         const response = await groq.chat.completions.create({
           model: "llama-3.3-70b-versatile",
           messages: [{ role: "user", content: userMessage }],
         });
-
         const reply = response.choices[0]?.message?.content || "Sorry, I couldn't process that request.";
         await interaction.editReply(reply);
       } catch (error) {
@@ -43,51 +44,46 @@ function createClient() {
 
   client.on('messageCreate', async message => {
     if (message.author.bot) return;
+
     const content_lower = message.content.toLowerCase();
+    console.log(`Received message: ${content_lower}`);
 
     const regexResponses = [
-      { regex: new RE2('\\berm+\\b'), response: 'https://tenor.com/view/omori-erm-uuuh-uhh-huh-gif-15238876008948972055' },
-      { regex: new RE2('\\bguh+\\b'), response: 'https://tenor.com/view/guh-gif-25116077' },
-      { regex: new RE2('\\bglorpshit\\b'), response: 'https://tenor.com/view/glorp-glorpshit-mad-gif-12826934952903770254' },
-      { regex: new RE2('\\bmeow\\b'), response: message.author.username === "lyxchee" 
-          ? 'https://tenor.com/view/larry-larry-cat-chat-larry-meme-chat-meme-cat-gif-10061556685042597078'
-          : 'https://tenor.com/view/big-poo-big-poo-cat-big-poo-cat-gif-8095478642247689280'
-      },
-      { regex: new RE2('\\bfemboy\\b'), response: message.author.username === "homeo_stasis"
-          ? 'https://tenor.com/view/anime-gif-1742373052751281532'
-          : null
-      }
+      { regex: new RE2('\berm+\b'), url: 'https://tenor.com/view/omori-erm-uuuh-uhh-huh-gif-15238876008948972055' },
+      { regex: new RE2('\bguh+\b'), url: 'https://tenor.com/view/guh-gif-25116077' },
+      { regex: new RE2('\bglorpshit\b'), url: 'https://tenor.com/view/glorp-glorpshit-mad-gif-12826934952903770254' },
+      { regex: new RE2('\bmeow\b'), url: 'https://tenor.com/view/big-poo-big-poo-cat-big-poo-cat-gif-8095478642247689280' },
+      { regex: new RE2('\bmeow\b'), url: 'https://tenor.com/view/larry-larry-cat-chat-larry-meme-chat-meme-cat-gif-10061556685042597078', condition: user => user === "lyxchee" },
+      { regex: new RE2('\bfemboy\b'), url: 'https://tenor.com/view/anime-gif-1742373052751281532', condition: user => user === "homeo_stasis" }
     ];
 
-    for (const { regex, response } of regexResponses) {
-      if (regex.test(content_lower) && response) {
+    for (let { regex, url, condition } of regexResponses) {
+      if (regex.test(content_lower) && (!condition || condition(message.author.username))) {
         bot_active = true;
-        await sendTemporaryMessage(message, response);
+        console.log('Matched a keyword, sending response');
+        try {
+          const msg = await message.channel.send(url);
+          setTimeout(async () => {
+            try {
+              await msg.delete();
+              console.log('Response deleted');
+            } catch (error) {
+              console.error('Error deleting response:', error);
+            }
+          }, 5000);
+        } catch (error) {
+          console.error('Error sending response:', error);
+        }
         return;
       }
     }
 
     bot_active = false;
+    console.log('No keyword matched');
   });
 }
 
-// Helper function to send temporary messages
-async function sendTemporaryMessage(message, response) {
-  try {
-    const msg = await message.channel.send(response);
-
-    // Check if the bot has permission to delete messages before attempting to do so
-    if (message.guild.me.permissions.has("MANAGE_MESSAGES")) {
-      setTimeout(() => {
-        msg.delete().catch(error => console.error('Error deleting response:', error));
-      }, 5000);
-    }
-  } catch (error) {
-    console.error('Error sending message:', error);
-  }
-}
-
-// Log in the bot
+// Function to log in the bot
 function loginBot() {
   createClient();
   client.login(process.env.DISCORD_TOKEN)
@@ -95,7 +91,7 @@ function loginBot() {
     .catch(error => console.error('Error logging in:', error));
 }
 
-// Create a simple HTTP server to prevent boot timeout
+// Create a simple HTTP server to prevent Heroku boot timeout
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
