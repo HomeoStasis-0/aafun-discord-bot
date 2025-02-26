@@ -36,6 +36,7 @@ function createClient() {
     // const cumRegex = new RE2('\\b(cum|cums|cumming|bust|busting|busted|cream|creams|creaming|creamed)\\b', 'i');
     const glorpshitRegex = new RE2('\\bglorpshit\\b');
     const meowRegex = new RE2('\\bmeow\\b');
+    const femboyRegex = new RE2('\\bfemboy\\b');
 
 
     console.log(`Testing regex patterns against message content...`);
@@ -124,6 +125,19 @@ function createClient() {
       bot_active = true
       console.log('Matched a keyword, sending response');
       message.channel.send('https://tenor.com/view/big-poo-big-poo-cat-big-poo-cat-gif-8095478642247689280')
+      .then(msg => {
+        console.log('Response sent successfully');
+        setTimeout(() => {
+          msg.delete()
+            .then(() => console.log('Response deleted'))
+            .catch(error => console.error('Error deleting response:', error));
+        }, 5000);
+      })
+    }
+    else if (femboyRegex.test(content_lower) && message.author.username == "homeo_stasis") {
+      bot_active = true
+      console.log('Matched a keyword, sending response');
+      message.channel.send('https://tenor.com/view/anime-gif-1742373052751281532')
       .then(msg => {
         console.log('Response sent successfully');
         setTimeout(() => {
