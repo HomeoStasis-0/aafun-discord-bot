@@ -26,6 +26,11 @@ function createClient() {
   client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
+    if (userMessage.includes("what's your name") || userMessage.includes("what is your name") || userMessage.includes("who are you")) {
+      await interaction.editReply(`My name is ${client.user.username}!`);
+      return;
+    }
+
     if (interaction.commandName === 'chat') {
       const userMessage = interaction.options.getString('message');
       await interaction.deferReply();
