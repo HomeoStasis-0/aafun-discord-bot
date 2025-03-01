@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes } = require('discord.js');
 const RE2 = require('re2');
 const http = require('http');
 const axios = require('axios');
@@ -11,6 +11,50 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 let client;
 let bot_active = false;
+
+async function registerCommands() {
+  const commands = [
+    {
+      name: 'chat',
+      description: 'Chat with the bot',
+      options: [
+        {
+          name: 'message',
+          type: 3, // STRING
+          description: 'The message to send to the bot',
+          required: true,
+        },
+      ],
+    },
+    {
+      name: 'create_image',
+      description: 'Generate an image based on a prompt',
+      options: [
+        {
+          name: 'prompt',
+          type: 3, // STRING
+          description: 'The prompt for the image generation',
+          required: true,
+        },
+      ],
+    },
+  ];
+
+  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+  try {
+    console.log('Started refreshing application (/) commands.');
+
+    await rest.put(
+      Routes.applicationCommands(process.env.CLIENT_ID),
+      { body: commands },
+    );
+
+    console.log('Successfully reloaded application (/) commands.');
+  } catch (error) {
+    console.error(error);
+  }
+}
 
 function createClient() {
   client = new Client({
@@ -255,3 +299,4 @@ http.createServer((req, res) => {
 
 // Initial login attempt
 loginBot();
+registerCommands();
