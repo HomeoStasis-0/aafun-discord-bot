@@ -1,51 +1,14 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, REST, Routes } = require('discord.js');
+const { Client, GatewayIntentBits } = require('discord.js');
 const RE2 = require('re2');
 const http = require('http');
 const axios = require('axios');
 const Groq = require('groq-sdk');
-const fetch = require('node-fetch'); // Add this line
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 let client;
 let bot_active = false;
-
-const commands = [
-  {
-    name: 'chat',
-    description: 'Chat with the bot',
-    options: [
-      {
-        name: 'message',
-        type: 3, // STRING type
-        description: 'The message to send to the bot',
-        required: true,
-      },
-    ],
-  },
-  {
-    name: 'create_image',
-    description: 'Generate an image based on a prompt',
-  },
-];
-
-const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-
-(async () => {
-  try {
-    console.log('Started refreshing application (/) commands.');
-
-    await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
-      { body: commands },
-    );
-
-    console.log('Successfully reloaded application (/) commands.');
-  } catch (error) {
-    console.error(error);
-  }
-})();
 
 function createClient() {
   client = new Client({
@@ -135,32 +98,9 @@ function createClient() {
         console.error('Error fetching AI response:', error.response?.data || error.message);
         await interaction.editReply("Sorry, I couldn't process that request.");
       }
-    } else if (interaction.commandName === 'create_image') { // Add this block
-      await interaction.deferReply();
-      try {
-        const response = await fetch('https://text.pollinations.ai/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            messages: [
-              { role: 'system', content: 'You are a helpful assistant.' },
-              { role: 'user', content: 'What is artificial intelligence?' }
-            ],
-            seed: 42,
-            model: 'mistral'
-          }),
-        });
-
-        const data = await response.json();
-        await interaction.editReply(data.choices[0]?.message?.content || "Sorry, I couldn't generate the text.");
-      } catch (error) {
-        console.error('Error generating text:', error.response?.data || error.message);
-        await interaction.editReply("Sorry, I couldn't generate the text.");
-      }
     }
   });
+  
 
   client.on('messageCreate', message => {
     console.log(`Received message: ${message.content}`);  // Log received messages
