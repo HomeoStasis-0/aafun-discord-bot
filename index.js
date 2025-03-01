@@ -1,60 +1,14 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, REST, Routes } = require('discord.js');
+const { Client, GatewayIntentBits } = require('discord.js');
 const RE2 = require('re2');
 const http = require('http');
 const axios = require('axios');
 const Groq = require('groq-sdk');
-const fs = require('fs');
-const fetch = require('node-fetch'); // Ensure node-fetch is imported correctly
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 let client;
 let bot_active = false;
-
-async function registerCommands() {
-  const commands = [
-    {
-      name: 'chat',
-      description: 'Chat with the bot',
-      options: [
-        {
-          name: 'message',
-          type: 3, // STRING
-          description: 'The message to send to the bot',
-          required: true,
-        },
-      ],
-    },
-    {
-      name: 'create_image',
-      description: 'Generate an image based on a prompt',
-      options: [
-        {
-          name: 'prompt',
-          type: 3, // STRING
-          description: 'The prompt for the image generation',
-          required: true,
-        },
-      ],
-    },
-  ];
-
-  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-
-  try {
-    console.log('Started refreshing application (/) commands.');
-
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commands },
-    );
-
-    console.log('Successfully reloaded application (/) commands.');
-  } catch (error) {
-    console.error(error);
-  }
-}
 
 function createClient() {
   client = new Client({
@@ -143,28 +97,6 @@ function createClient() {
       } catch (error) {
         console.error('Error fetching AI response:', error.response?.data || error.message);
         await interaction.editReply("Sorry, I couldn't process that request.");
-      }
-    } else if (interaction.commandName === 'create_image') {
-      const prompt = interaction.options.getString('prompt');
-      await interaction.deferReply();
-
-      try {
-        const width = 1024;
-        const height = 1024;
-        const seed = 42; // Each seed generates a new image variation
-        const model = 'flux'; // Using 'flux' as default if model is not provided
-
-        const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(prompt)}?width=${width}&height=${height}&seed=${seed}&model=${model}`;
-
-        const response = await fetch(imageUrl);
-        const buffer = await response.buffer();
-        const imagePath = 'image.png';
-        fs.writeFileSync(imagePath, buffer);
-
-        await interaction.editReply({ files: [imagePath] });
-      } catch (error) {
-        console.error('Error generating image:', error.message);
-        await interaction.editReply("Sorry, I couldn't generate the image.");
       }
     }
   });
@@ -299,4 +231,3 @@ http.createServer((req, res) => {
 
 // Initial login attempt
 loginBot();
-registerCommands();
