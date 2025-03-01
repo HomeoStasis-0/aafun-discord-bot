@@ -101,9 +101,9 @@ function createClient() {
         chatMemory[userId].push({ role: "assistant", content: reply });
         
         // Send the reply chunks one by one
-        for (const chunk of replyChunks) {
-          await interaction.followUp(chunk);
-        }
+        // for (const chunk of replyChunks) {
+        //   await interaction.followUp(chunk);
+        // }
         
         // Remove the final call to editReply
         // await interaction.editReply(reply);
