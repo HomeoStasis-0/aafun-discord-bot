@@ -4,6 +4,7 @@ const RE2 = require('re2');
 const http = require('http');
 const axios = require('axios');
 const Groq = require('groq-sdk');
+const fetch = require('node-fetch'); // Add this line
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -98,9 +99,32 @@ function createClient() {
         console.error('Error fetching AI response:', error.response?.data || error.message);
         await interaction.editReply("Sorry, I couldn't process that request.");
       }
+    } else if (interaction.commandName === 'create_image') { // Add this block
+      await interaction.deferReply();
+      try {
+        const response = await fetch('https://text.pollinations.ai/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: [
+              { role: 'system', content: 'You are a helpful assistant.' },
+              { role: 'user', content: 'What is artificial intelligence?' }
+            ],
+            seed: 42,
+            model: 'mistral'
+          }),
+        });
+
+        const data = await response.json();
+        await interaction.editReply(data.choices[0]?.message?.content || "Sorry, I couldn't generate the text.");
+      } catch (error) {
+        console.error('Error generating text:', error.response?.data || error.message);
+        await interaction.editReply("Sorry, I couldn't generate the text.");
+      }
     }
   });
-  
 
   client.on('messageCreate', message => {
     console.log(`Received message: ${message.content}`);  // Log received messages
