@@ -5,7 +5,7 @@ const http = require('http');
 const axios = require('axios');
 const Groq = require('groq-sdk');
 const fs = require('fs');
-const fetch = require('node-fetch');
+const fetch = require('node-fetch'); // Ensure node-fetch is imported correctly
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -99,6 +99,28 @@ function createClient() {
       } catch (error) {
         console.error('Error fetching AI response:', error.response?.data || error.message);
         await interaction.editReply("Sorry, I couldn't process that request.");
+      }
+    } else if (interaction.commandName === 'create_image') {
+      const prompt = interaction.options.getString('prompt');
+      await interaction.deferReply();
+
+      try {
+        const width = 1024;
+        const height = 1024;
+        const seed = 42; // Each seed generates a new image variation
+        const model = 'flux'; // Using 'flux' as default if model is not provided
+
+        const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(prompt)}?width=${width}&height=${height}&seed=${seed}&model=${model}`;
+
+        const response = await fetch(imageUrl);
+        const buffer = await response.buffer();
+        const imagePath = 'image.png';
+        fs.writeFileSync(imagePath, buffer);
+
+        await interaction.editReply({ files: [imagePath] });
+      } catch (error) {
+        console.error('Error generating image:', error.message);
+        await interaction.editReply("Sorry, I couldn't generate the image.");
       }
     }
   });
@@ -233,51 +255,3 @@ http.createServer((req, res) => {
 
 // Initial login attempt
 loginBot();
-
-// Node.js code examples for Pollinations.AI
-
-// Example 1: Image Generation
-
-async function downloadImage(imageUrl) {
-  // Fetching the image from the URL
-  const response = await fetch(imageUrl);
-  // Reading the response as a buffer
-  const buffer = await response.buffer();
-  // Writing the buffer to a file named 'image.png'
-  fs.writeFileSync('image.png', buffer);
-  // Logging completion message
-  console.log('Download Completed');
-}
-
-// Image details
-const prompt = 'A beautiful landscape';
-const width = 1024;
-const height = 1024;
-const seed = 42; // Each seed generates a new image variation
-const model = 'flux'; // Using 'flux' as default if model is not provided
-
-const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(prompt)}?width=${width}&height=${height}&seed=${seed}&model=${model}`;
-
-downloadImage(imageUrl);
-
-// Example 2: Text Generation with Private Response
-async function generatePrivateText() {
-  const response = await fetch('https://text.pollinations.ai/', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      messages: [
-        { role: 'user', content: 'Generate a creative story' }
-      ],
-      model: 'openai',
-      private: true  // Response won't appear in public feed
-    })
-  });
-  
-  const data = await response.text();
-  console.log('Generated Text:', data);
-}
-
-generatePrivateText();
