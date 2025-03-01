@@ -89,7 +89,20 @@ function createClient() {
         });
   
         const reply = response.choices[0]?.message?.content || "Sorry, I couldn't process that request.";
-  
+        const maxLength = 2000;
+        const replyChunks = [];
+
+        for (let i = 0; i < reply.length; i += maxLength) {
+          replyChunks.push(reply.substring(i, i + maxLength));
+        }
+
+        // Store bot's response in memory
+        chatMemory[userId].push({ role: "assistant", content: reply });
+
+        // Send the reply chunks one by one
+        for (const chunk of replyChunks) {
+          await interaction.followUp(chunk);
+        }
         // Store bot's response in memory
         chatMemory[userId].push({ role: "assistant", content: reply });
   
