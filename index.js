@@ -88,7 +88,6 @@ function createClient() {
           messages: chatMemory[userId],
         });
   
-        
         const reply = response.choices[0]?.message?.content || "Sorry, I couldn't process that request.";
         const maxLength = 2000;
         const replyChunks = [];
@@ -106,17 +105,14 @@ function createClient() {
           await interaction.followUp(chunk);
         }
         
-        // Store bot's response in memory
-        chatMemory[userId].push({ role: "assistant", content: reply });
-  
-        await interaction.editReply(reply);
+        // Remove the final call to editReply
+        // await interaction.editReply(reply);
       } catch (error) {
         console.error('Error fetching AI response:', error.response?.data || error.message);
         await interaction.editReply("Sorry, I couldn't process that request.");
       }
     }
   });
-  
 
   client.on('messageCreate', message => {
     console.log(`Received message: ${message.content}`);  // Log received messages
