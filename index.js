@@ -99,20 +99,15 @@ function createClient() {
         
         // Store bot's response in memory
         chatMemory[userId].push({ role: "assistant", content: reply });
-        
-        // Send the reply chunks one by one
-        // for (const chunk of replyChunks) {
-        //   await interaction.followUp(chunk);
-        // }
-        
-        // Remove the final call to editReply
-        // await interaction.editReply(reply);
+  
+        await interaction.editReply(reply);
       } catch (error) {
         console.error('Error fetching AI response:', error.response?.data || error.message);
         await interaction.editReply("Sorry, I couldn't process that request.");
       }
     }
   });
+  
 
   client.on('messageCreate', message => {
     console.log(`Received message: ${message.content}`);  // Log received messages
