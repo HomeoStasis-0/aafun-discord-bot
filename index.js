@@ -99,8 +99,12 @@ function createClient() {
         
         // Store bot's response in memory
         chatMemory[userId].push({ role: "assistant", content: reply });
-  
-        await interaction.editReply(reply);
+        
+        // Send the reply chunks one by one
+        for (const chunk of replyChunks) {
+          await interaction.followUp(chunk);
+        }
+        
       } catch (error) {
         console.error('Error fetching AI response:', error.response?.data || error.message);
         await interaction.editReply("Sorry, I couldn't process that request.");
