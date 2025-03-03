@@ -25,12 +25,12 @@ function createClient() {
 
   const chatMemory = {}; 
 
+  
   client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
   
     if (interaction.commandName === 'chat') {
       const userMessage = interaction.options.getString('message');
-      await interaction.deferReply();
   
       try {
         const userId = interaction.user.id;
@@ -50,7 +50,7 @@ function createClient() {
           lowerMessage.includes("your name") ||
           lowerMessage.includes("who you are")
         ) {
-          await interaction.editReply(`My name is ${client.user.username}!`);
+          await interaction.reply(`My name is ${client.user.username}!`);
           return;
         }
   
@@ -60,7 +60,7 @@ function createClient() {
           lowerMessage.includes("what is my name") ||
           lowerMessage.includes("who am i")
         ) {
-          await interaction.editReply(`Your name is ${userNickname}!`);
+          await interaction.reply(`Your name is ${userNickname}!`);
           return;
         }
   
@@ -71,7 +71,7 @@ function createClient() {
           lowerMessage.includes("who is your dad") ||
           lowerMessage.includes("who's your dad")
         ) {
-          await interaction.editReply("My father is Javi, also known as 𝓯𝓻𝓮𝓪𝓴𝔂.");
+          await interaction.reply("My father is Javi, also known as 𝓯𝓻𝓮𝓪𝓴𝔂.");
           return;
         }
   
@@ -91,32 +91,49 @@ function createClient() {
         const reply = response.choices[0]?.message?.content || "Sorry, I couldn't process that request.";
         const maxLength = 2000;
         const replyChunks = [];
-        
+  
         // Split the reply into chunks if it exceeds 2000 characters
         for (let i = 0; i < reply.length; i += maxLength) {
           replyChunks.push(reply.substring(i, i + maxLength));
         }
-        
+  
         // Store bot's response in memory
         chatMemory[userId].push({ role: "assistant", content: reply });
-        
+  
         // Send the reply chunks one by one
+        if (!interaction.replied) {
+          await interaction.reply(replyChunks.shift());
+        }
         for (const chunk of replyChunks) {
           await interaction.followUp(chunk);
         }
-        
+  
       } catch (error) {
         console.error('Error fetching AI response:', error.response?.data || error.message);
-        await interaction.editReply("Sorry, I couldn't process that request.");
+        if (!interaction.replied) {
+          await interaction.reply("Sorry, I couldn't process that request.");
+        } else {
+          await interaction.followUp("Sorry, I couldn't process that request.");
+        }
+      }
+    } else if (interaction.commandName === 'clear') {
+      const userId = interaction.user.id;
+      if (chatMemory[userId] && chatMemory[userId].length > 0) {
+        chatMemory[userId] = [];
+        await interaction.reply({ content: "Your chat memory has been cleared.", ephemeral: true })
+        .then(() => {
+          console.log('Response sent successfully');
+        })
+        .catch(error => console.error('Error sending response:', error));
+      } else {
+        await interaction.reply({ content: "Your chat memory is already empty.", ephemeral: true })
+        .then(() => {
+          console.log('Response sent successfully');
+        })
+        .catch(error => console.error('Error sending response:', error));
       }
     }
-    else if (interaction.commandName === 'clear') {
-      const userId = interaction.user.id;
-      chatMemory[userId] = [];
-      await interaction.reply("Your chat memory has been cleared.");
-    }
   });
-  
 
   client.on('messageCreate', message => {
     console.log(`Received message: ${message.content}`);  // Log received messages
@@ -236,13 +253,25 @@ function loginBot() {
     .catch(error => console.error('Error logging in:', error));
 }
 
-// Create a simple HTTP server to prevent Heroku boot timeout
 const PORT = process.env.PORT || 3000;
-http.createServer((req, res) => {
+const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Bot is running\n');
-}).listen(PORT, () => {
+});
+
+server.listen(PORT, () => {
   console.log(`Server is listening on port ${PORT}`);
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use, trying another port...`);
+    server.listen(0, () => {
+      console.log(`Server is now listening on port ${server.address().port}`);
+    });
+  } else {
+    throw err;
+  }
 });
 
 // Initial login attempt

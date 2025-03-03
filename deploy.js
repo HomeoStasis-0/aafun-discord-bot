@@ -7,8 +7,8 @@ const commands = [
     description: 'Chat with the bot',
     options: [
       {
-        type: 3, // STRING type
         name: 'message',
+        type: 3, // STRING type
         description: 'The message to send to the bot',
         required: true,
       },
