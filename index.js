@@ -110,6 +110,11 @@ function createClient() {
         await interaction.editReply("Sorry, I couldn't process that request.");
       }
     }
+    else if (interaction.commandName === 'clear') {
+      const userId = interaction.user.id;
+      chatMemory[userId] = [];
+      await interaction.reply("Your chat memory has been cleared.");
+    }
   });
   
 
