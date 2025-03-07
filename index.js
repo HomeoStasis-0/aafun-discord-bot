@@ -84,7 +84,7 @@ function createClient() {
   
         // Get AI response with memory
         const response = await groq.chat.completions.create({
-          model: "mixtral-8x7b-32768",
+          model: "mistral-saba-24b",
           messages: chatMemory[userId],
         });
   
