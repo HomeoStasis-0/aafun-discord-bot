@@ -110,10 +110,26 @@ function createClient() {
   
       } catch (error) {
         console.error('Error fetching AI response:', error.response?.data || error.message);
+  
+        // Handle specific Groq model terms error
+        if (error.response?.data?.error?.code === "model_terms_required") {
+          const termsUrl = "https://console.groq.com/playground?model=mistral-saba-24b";
+          const errorMessage = `The model requires terms acceptance. Please have the org admin accept the terms at ${termsUrl}`;
+          console.error(errorMessage);
+  
+          if (!interaction.replied) {
+            await interaction.reply(errorMessage);
+          } else {
+            console.error("Interaction has already been acknowledged.");
+          }
+          return;
+        }
+  
+        // Handle general errors
         if (!interaction.replied) {
           await interaction.reply("Sorry, I couldn't process that request.");
         } else {
-          await interaction.followUp("Sorry, I couldn't process that request.");
+          console.error("Interaction has already been acknowledged.");
         }
       }
     } else if (interaction.commandName === 'clear') {
@@ -151,6 +167,7 @@ function createClient() {
     const glorpshitRegex = new RE2('\\bglorpshit\\b');
     const meowRegex = new RE2('\\bmeow\\b');
     const femboyRegex = new RE2('\\bfemboy\\b');
+    const bombardiro_crocodillo = new RE2('\\bbombardiro crocodillo\\b');
 
     console.log(`Testing regex patterns against message content...`);
 
@@ -223,6 +240,19 @@ function createClient() {
       bot_active = true
       console.log('Matched a keyword, sending response');
       message.channel.send('https://tenor.com/view/anime-gif-1742373052751281532')
+      .then(msg => {
+        console.log('Response sent successfully');
+        setTimeout(() => {
+          msg.delete()
+            .then(() => console.log('Response deleted'))
+            .catch(error => console.error('Error deleting response:', error));
+        }, 5000);
+      })
+    }
+    else if (bombardiro_crocodillo.test(content_lower)) {
+      bot_active = true
+      console.log('Matched a keyword, sending response');
+      message.channel.send('https://tenor.com/view/bombardiro-crocodilo-bombardino-bombarillo-crocodillo-gif-11502489947518545947')
       .then(msg => {
         console.log('Response sent successfully');
         setTimeout(() => {
