@@ -3,12 +3,94 @@ const { Client, GatewayIntentBits } = require('discord.js');
 const RE2 = require('re2');
 const http = require('http');
 const axios = require('axios');
+const express = require('express');
 const Groq = require('groq-sdk');
+const fetch = require('node-fetch');
+const querystring = require('querystring');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
 let client;
 let bot_active = false;
+const userTokens = {}; // Store user tokens in memory
+const app = express();
+
+// Function to refresh the Spotify access token
+async function refreshAccessToken(userId) {
+  const refreshToken = userTokens[userId]?.refresh_token;
+
+  if (!refreshToken) {
+    console.error(`No refresh token found for user ${userId}`);
+    throw new Error('Refresh token not found');
+  }
+
+  try {
+    const tokenResponse = await axios.post('https://accounts.spotify.com/api/token', querystring.stringify({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: process.env.SPOTIFY_CLIENT_ID,
+      client_secret: process.env.SPOTIFY_CLIENT_SECRET,
+    }), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+
+    const { access_token, expires_in } = tokenResponse.data;
+
+    // Update the user's tokens
+    userTokens[userId].access_token = access_token;
+    userTokens[userId].expires_at = Date.now() + expires_in * 1000;
+
+    console.log(`Access token refreshed for user ${userId}`);
+    return access_token;
+  } catch (err) {
+    console.error(`Error refreshing access token for user ${userId}:`, err.response?.data || err.message);
+    throw new Error('Failed to refresh access token');
+  }
+}
+
+app.get('/callback', async (req, res) => {
+  const code = req.query.code;
+  const state = req.query.state; // This is the userId
+
+  if (!code || !state) {
+    console.error('Missing code or state in the callback request.');
+    return res.status(400).send('Missing code or state');
+  }
+
+  try {
+    console.log('Exchanging code for token...');
+    const tokenResponse = await axios.post('https://accounts.spotify.com/api/token', querystring.stringify({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
+      client_id: process.env.SPOTIFY_CLIENT_ID,
+      client_secret: process.env.SPOTIFY_CLIENT_SECRET,
+    }), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+
+    const { access_token, refresh_token, expires_in } = tokenResponse.data;
+
+    console.log('Token exchange successful:', { access_token, refresh_token });
+
+    // Store the tokens for the user
+    userTokens[state] = {
+      access_token,
+      refresh_token,
+      expires_at: Date.now() + expires_in * 1000, // Calculate expiration time
+    };
+
+    console.log('User tokens updated:', userTokens[state]);
+
+    res.send('You have successfully logged in to Spotify! You can now use the /spotify toptracks command.');
+  } catch (err) {
+    console.error('Error exchanging code for token:', err.response?.data || err.message);
+    res.status(500).send('Failed to log in to Spotify.');
+  }
+});
 
 function createClient() {
   client = new Client({
@@ -25,284 +107,154 @@ function createClient() {
 
   const chatMemory = {}; 
 
+
   client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
+    const userId = interaction.user.id;
+    if (interaction.commandName === 'spotify') {
+      const sub = interaction.options.getSubcommand();
   
+      if (sub === 'login') {
+        const scopes = 'user-top-read';
+        const authUrl = `https://accounts.spotify.com/authorize?${querystring.stringify({
+          response_type: 'code',
+          client_id: process.env.SPOTIFY_CLIENT_ID,
+          scope: scopes,
+          redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
+          state: userId,
+        })}`;
+      
+        console.log('Generated Spotify auth URL:', authUrl); // Log the URL for debugging
+      
+        // Send the login link as an ephemeral message
+        await interaction.reply({
+          content: `Click [here](${authUrl}) to log in to Spotify.`,
+          ephemeral: true, // Makes the message visible only to the user
+        });
+      }       if (sub === 'toptracks') {
+        let token = userTokens[userId]?.access_token;
+      
+        // Check if the token is expired
+        if (!token || Date.now() >= userTokens[userId]?.expires_at) {
+          try {
+            console.log(`Access token expired for user ${userId}. Refreshing...`);
+            token = await refreshAccessToken(userId);
+          } catch (err) {
+            return interaction.reply("Failed to refresh your Spotify access token. Please log in again using `/spotify login`.");
+          }
+        }
+      
+        try {
+          const topTracks = await getTopTracks();
+      
+          if (!topTracks || topTracks.length === 0) {
+            return interaction.reply("No top tracks found. Please listen to more music on Spotify!");
+          }
+      
+          const embeds = topTracks.map(track => ({
+            title: track.name,
+            url: track.external_urls.spotify,
+            description: `By ${track.artists.map(artist => artist.name).join(', ')}`,
+            thumbnail: { url: track.album.images[0]?.url },
+            footer: { text: `Album: ${track.album.name}` },
+          }));
+      
+          await interaction.reply({ embeds });
+        } catch (err) {
+          console.error('Spotify error:', err);
+          await interaction.reply("Failed to fetch top tracks. Please ensure you are logged in to Spotify.");
+        }
+      }
+    }
     if (interaction.commandName === 'chat') {
       const userMessage = interaction.options.getString('message');
       await interaction.deferReply();
-  
+
       try {
-        const userId = interaction.user.id;
-  
-        if (!chatMemory[userId]) {
-          chatMemory[userId] = [];
-        }
-  
-        // Convert message to lowercase for case-insensitive comparison
+        if (!chatMemory[userId]) chatMemory[userId] = [];
         const lowerMessage = userMessage.toLowerCase();
-  
-        // Predefined responses
-        if (
-          lowerMessage.includes("what's your name") ||
-          lowerMessage.includes("what is your name") ||
-          lowerMessage.includes("who are you") ||
-          lowerMessage.includes("your name") ||
-          lowerMessage.includes("who you are")
-        ) {
-          await interaction.editReply(`My name is ${client.user.username}!`);
-          return;
+
+        if (lowerMessage.includes("what's your name") || lowerMessage.includes("your name") || lowerMessage.includes("who are you")) {
+          return interaction.editReply(`My name is ${client.user.username}!`);
         }
-  
+
         const userNickname = interaction.member?.nickname || interaction.user.username;
-        if (
-          lowerMessage.includes("what's my name") ||
-          lowerMessage.includes("what is my name") ||
-          lowerMessage.includes("who am i")
-        ) {
-          await interaction.editReply(`Your name is ${userNickname}!`);
-          return;
+        if (lowerMessage.includes("what's my name") || lowerMessage.includes("who am i")) {
+          return interaction.editReply(`Your name is ${userNickname}!`);
         }
-  
-        // Custom response for "who is your father"
-        if (
-          lowerMessage.includes("who is your father") ||
-          lowerMessage.includes("who's your father") ||
-          lowerMessage.includes("who is your dad") ||
-          lowerMessage.includes("who's your dad")
-        ) {
-          await interaction.editReply("My father is Javi, also known as 𝓯𝓻𝓮𝓪𝓴𝔂.");
-          return;
+
+        if (lowerMessage.includes("who is your father") || lowerMessage.includes("who's your dad")) {
+          return interaction.editReply("My father is Javi, also known as 𝓯𝓻𝓮𝓪𝓴𝔂.");
         }
-  
-        // Store message in user memory
+
         chatMemory[userId].push({ role: "user", content: userMessage });
-  
-        if (chatMemory[userId].length > 10) {
-          chatMemory[userId].shift();
-        }
-  
-        // Get AI response with memory
+        if (chatMemory[userId].length > 10) chatMemory[userId].shift();
+
         const response = await groq.chat.completions.create({
-          model: "mixtral-8x7b-32768",
+          model: "llama3-70b-8192",
           messages: chatMemory[userId],
         });
-  
+
         const reply = response.choices[0]?.message?.content || "Sorry, I couldn't process that request.";
         const maxLength = 2000;
-        const replyChunks = [];
-        
-        // Split the reply into chunks if it exceeds 2000 characters
         for (let i = 0; i < reply.length; i += maxLength) {
-          replyChunks.push(reply.substring(i, i + maxLength));
+          await interaction.followUp(reply.substring(i, i + maxLength));
         }
-        
-        // Store bot's response in memory
         chatMemory[userId].push({ role: "assistant", content: reply });
-        
-        // Send the reply chunks one by one
-        for (const chunk of replyChunks) {
-          await interaction.followUp(chunk);
-        }
-        
-      } catch (error) {
-        console.error('Error fetching AI response:', error.response?.data || error.message);
-        await interaction.editReply("Sorry, I couldn't process that request.");
+      } catch (err) {
+        console.error('Error:', err);
+        await interaction.editReply("Sorry, something went wrong.");
       }
-    }
-    else if (interaction.commandName === 'clear') {
-      const userId = interaction.user.id;
+    } else if (interaction.commandName === 'clear') {
       chatMemory[userId] = [];
       await interaction.reply("Your chat memory has been cleared.");
     }
   });
-  
 
   client.on('messageCreate', message => {
-    console.log(`Received message: ${message.content}`);  // Log received messages
-
-    if (message.author.id === client.user.id) {
-      console.log('Ignoring message from the bot itself');
-      return;
-    }
-
+    if (message.author.bot) return;
     const content_lower = message.content.toLowerCase();
-    console.log(`Message content in lowercase: ${content_lower}`);
+    const matchers = [
+      [/\berm+\b/, 'https://tenor.com/view/omori-erm-uuuh-uhh-huh-gif-15238876008948972055'],
+      [/\bguh+\b/, 'https://tenor.com/view/guh-gif-25116077'],
+      [/\bglorpshit\b/, 'https://tenor.com/view/glorp-glorpshit-mad-gif-12826934952903770254'],
+      [/\bmeow\b/, message.author.username === 'lyxchee'
+        ? 'https://tenor.com/view/larry-larry-cat-chat-larry-meme-chat-meme-cat-gif-10061556685042597078'
+        : 'https://tenor.com/view/big-poo-big-poo-cat-big-poo-cat-gif-8095478642247689280'],
+      [/\bfemboy\b/, message.author.username === 'homeo_stasis' ? 'https://tenor.com/view/anime-gif-1742373052751281532' : null],
+      [/\b15\b.*\bgirl\b|\bgirl\b.*\b15\b/, 'minecraft movie incident'],
+      [/\bcommunism\b/, 'https://tenor.com/view/cat-asian-chinese-silly-ccp-gif-17771773925036748435'],
+      [/\bkys\b|\bkms\b/, 'https://tenor.com/view/high-tier-human-low-tier-god-ltg-love-yourself-lowtiergod-gif-4914755758940822771'],
+      [/\bkhanh\b/, 'https://cdn.discordapp.com/attachments/1277012851352932516/1346031380013781043/khan.gif']
+    ];
 
-    const ermRegex = new RE2('\\berm+\\b');
-    const guhRegex = new RE2('\\bguh+\\b');
-    const glorpshitRegex = new RE2('\\bglorpshit\\b');
-    const meowRegex = new RE2('\\bmeow\\b');
-    const femboyRegex = new RE2('\\bfemboy\\b');
-    const fifteenGirlRegex = new RE2('\\b15\\b.*\\bgirl\\b|\\bgirl\\b.*\\b15\\b');
-    const communismRegex = new RE2('\\bcommunism\\b');
-    const kysRegex = new RE2('\\bkys\\b');
-    const kmsRegex = new RE2('\\bkms\\b');
-    const khanhRegex = new RE2('\\bkhanh\\b');
-
-    console.log(`Testing regex patterns against message content...`);
-
-    if (ermRegex.test(content_lower)) {
-      bot_active = true;
-      console.log('Matched a keyword, sending response');
-      message.channel.send('https://tenor.com/view/omori-erm-uuuh-uhh-huh-gif-15238876008948972055')
-      .then(msg => {
-        console.log('Response sent successfully');
-        setTimeout(() => {
-          msg.delete()
-            .then(() => console.log('Response deleted'))
-            .catch(error => console.error('Error deleting response:', error));
-        }, 5000);
-      })
-    }
-    else if (guhRegex.test(content_lower)) {
-      bot_active = true;
-      console.log('Matched a keyword, sending response');
-      message.channel.send('https://tenor.com/view/guh-gif-25116077')
-      .then(msg => {
-        console.log('Response sent successfully');
-        setTimeout(() => {
-          msg.delete()
-            .then(() => console.log('Response deleted'))
-            .catch(error => console.error('Error deleting response:', error));
-        }, 5000);
-      })
-    }
-    else if (glorpshitRegex.test(content_lower)) {
-      bot_active = true
-      console.log('Matched a keyword, sending response');
-      message.channel.send('https://tenor.com/view/glorp-glorpshit-mad-gif-12826934952903770254')
-      .then(msg => {
-        console.log('Response sent successfully');
-        setTimeout(() => {
-          msg.delete()
-            .then(() => console.log('Response deleted'))
-            .catch(error => console.error('Error deleting response:', error));
-        }, 5000);
-      })
-    }
-    else if (meowRegex.test(content_lower) && message.author.username == "lyxchee") {
-      bot_active = true
-      console.log('Matched a keyword, sending response');
-      message.channel.send('https://tenor.com/view/larry-larry-cat-chat-larry-meme-chat-meme-cat-gif-10061556685042597078')
-      .then(msg => {
-        console.log('Response sent successfully');
-        setTimeout(() => {
-          msg.delete()
-            .then(() => console.log('Response deleted'))
-            .catch(error => console.error('Error deleting response:', error));
-        }, 5000);
-      })
-    }
-    else if (meowRegex.test(content_lower)) {
-      bot_active = true
-      console.log('Matched a keyword, sending response');
-      message.channel.send('https://tenor.com/view/big-poo-big-poo-cat-big-poo-cat-gif-8095478642247689280')
-      .then(msg => {
-        console.log('Response sent successfully');
-        setTimeout(() => {
-          msg.delete()
-            .then(() => console.log('Response deleted'))
-            .catch(error => console.error('Error deleting response:', error));
-        }, 5000);
-      })
-    }
-    else if (femboyRegex.test(content_lower) && message.author.username == "homeo_stasis") {
-      bot_active = true
-      console.log('Matched a keyword, sending response');
-      message.channel.send('https://tenor.com/view/anime-gif-1742373052751281532')
-      .then(msg => {
-        console.log('Response sent successfully');
-        setTimeout(() => {
-          msg.delete()
-            .then(() => console.log('Response deleted'))
-            .catch(error => console.error('Error deleting response:', error));
-        }, 5000);
-      })
-    }
-    else if (fifteenGirlRegex.test(content_lower)) {
-      bot_active = true;
-      console.log('Matched "15" and "girl" in the same sentence, sending response');
-      message.channel.send('minecraft movie incident')
-      .then(msg => {
-        console.log('Response sent successfully');
-        setTimeout(() => {
-          msg.delete()
-            .then(() => console.log('Response deleted'))
-            .catch(error => console.error('Error deleting response:', error));
-        }, 5000);
-      });
-    }
-    else if (communismRegex.test(content_lower)) {
-      bot_active = true;
-      console.log('Matched a keyword, sending response');
-      message.channel.send('https://tenor.com/view/cat-asian-chinese-silly-ccp-gif-17771773925036748435')
-      .then(msg => {
-        console.log('Response sent successfully');
-        setTimeout(() => {
-          msg.delete()
-            .then(() => console.log('Response deleted'))
-            .catch(error => console.error('Error deleting response:', error));
-        }, 5000);
+    for (const [regex, url] of matchers) {
+      if (regex.test(content_lower) && url) {
+        message.channel.send(url).then(msg => setTimeout(() => msg.delete().catch(console.error), 5000));
+        return;
       }
-    )
-    }
-    else if (kysRegex.test(content_lower) || kmsRegex.test(content_lower)) {
-      bot_active = true;
-      console.log('Matched a keyword, sending response');
-      message.channel.send('https://tenor.com/view/high-tier-human-low-tier-god-ltg-love-yourself-lowtiergod-gif-4914755758940822771')
-      .then(msg => {
-        console.log('Response sent successfully');
-        setTimeout(() => {
-          msg.delete()
-            .then(() => console.log('Response deleted'))
-            .catch(error => console.error('Error deleting response:', error));
-        }, 5000);
-      })
-    }
-    else if (khanhRegex.test(content_lower)) {
-      bot_active = true;
-      console.log('Matched a keyword, sending response');
-      message.channel.send('https://cdn.discordapp.com/attachments/1277012851352932516/1346031380013781043/khan.gif')
-      .then(msg => {
-        console.log('Response sent successfully');
-        setTimeout(() => {
-          msg.delete()
-            .then(() => console.log('Response deleted'))
-            .catch(error => console.error('Error deleting response:', error));
-        }, 5000);
-      })
-    }
-    
-    else {
-      bot_active = false;
-      console.log('No keyword matched');
-    }
-
-    if (bot_active) {
-      console.log('Bot is active');
-    } else {
-      console.log('Bot is inactive');
     }
   });
 }
 
-// Function to log in the bot
+
 function loginBot() {
   createClient();
   client.login(process.env.DISCORD_TOKEN)
     .then(() => console.log('Logged in successfully'))
-    .catch(error => console.error('Error logging in:', error));
+    .catch(console.error);
 }
 
-// Create a simple HTTP server to prevent Heroku boot timeout
 const PORT = process.env.PORT || 3000;
-http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Bot is running\n');
-}).listen(PORT, () => {
+
+// Default route for non-matching paths
+app.get('/', (req, res) => {
+  res.send('Bot is running\n');
+});
+
+// Start the Express server
+app.listen(PORT, () => {
   console.log(`Server is listening on port ${PORT}`);
 });
 
-// Initial login attempt
 loginBot();
