@@ -18,6 +18,22 @@ const commands = [
     name: 'clear',
     description: 'Clear your chat memory',
   },
+  {
+    name: 'spotify',
+    description: 'Spotify integration commands',
+    options: [
+      {
+        name: 'login',
+        type: 1, // SUB_COMMAND type
+        description: 'Log in to your Spotify account',
+      },
+      {
+        name: 'toptracks',
+        type: 1, // SUB_COMMAND type
+        description: 'Get your top Spotify tracks',
+      },
+    ],
+  },
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -27,7 +43,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     console.log('Started refreshing application (/) commands.');
 
     await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
+      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), // Use Guild Commands for faster updates
       { body: commands },
     );
 
