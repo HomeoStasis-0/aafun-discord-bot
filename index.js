@@ -168,6 +168,7 @@ function createClient() {
     const meowRegex = new RE2('\\bmeow\\b');
     const femboyRegex = new RE2('\\bfemboy\\b');
     const bombardiro_crocodillo = new RE2('\\bbombardiro crocodillo\\b');
+    const chicken_jockeyRegex = new RE2('\\bchicken jockey\\b');
 
     console.log(`Testing regex patterns against message content...`);
 
@@ -253,6 +254,19 @@ function createClient() {
       bot_active = true
       console.log('Matched a keyword, sending response');
       message.channel.send('https://tenor.com/view/bombardiro-crocodilo-bombardino-bombarillo-crocodillo-gif-11502489947518545947')
+      .then(msg => {
+        console.log('Response sent successfully');
+        setTimeout(() => {
+          msg.delete()
+            .then(() => console.log('Response deleted'))
+            .catch(error => console.error('Error deleting response:', error));
+        }, 5000);
+      })
+    }
+    else if (chicken_jockeyRegex.test(content_lower)) {
+      bot_active = true
+      console.log('Matched a keyword, sending response');
+      message.channel.send('https://tenor.com/view/minecraft-minecraft-movie-a-minecraft-movie-steve-jack-black-gif-4079785775268000209')
       .then(msg => {
         console.log('Response sent successfully');
         setTimeout(() => {
