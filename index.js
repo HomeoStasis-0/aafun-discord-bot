@@ -138,6 +138,7 @@ function createClient() {
     const communismRegex = new RE2('\\bcommunism\\b');
     const kysRegex = new RE2('\\bkys\\b');
     const kmsRegex = new RE2('\\bkms\\b');
+    const khanhRegex = new RE2('\\bkhanh\\b');
 
     console.log(`Testing regex patterns against message content...`);
 
@@ -250,6 +251,19 @@ function createClient() {
       bot_active = true;
       console.log('Matched a keyword, sending response');
       message.channel.send('https://tenor.com/view/high-tier-human-low-tier-god-ltg-love-yourself-lowtiergod-gif-4914755758940822771')
+      .then(msg => {
+        console.log('Response sent successfully');
+        setTimeout(() => {
+          msg.delete()
+            .then(() => console.log('Response deleted'))
+            .catch(error => console.error('Error deleting response:', error));
+        }, 5000);
+      })
+    }
+    else if (khanhRegex.test(content_lower)) {
+      bot_active = true;
+      console.log('Matched a keyword, sending response');
+      message.channel.send('https://cdn.discordapp.com/attachments/1277012851352932516/1346031380013781043/khan.gif')
       .then(msg => {
         console.log('Response sent successfully');
         setTimeout(() => {
