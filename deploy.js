@@ -1,6 +1,9 @@
 const { REST, Routes } = require('discord.js');
 require('dotenv').config();
 
+// instantiate REST client
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
 const commands = [
   {
     name: 'chat',
@@ -8,7 +11,7 @@ const commands = [
     options: [
       {
         name: 'message',
-        type: 3, // STRING type
+        type: 3, // STRING
         description: 'The message to send to the bot',
         required: true,
       },
@@ -20,12 +23,21 @@ const commands = [
   },
   {
     name: 'spotify',
+<<<<<<< HEAD
     description: 'Spotify integration commands',
     options: [
       {
         name: 'login',
         type: 1, // SUB_COMMAND type
         description: 'Log in to your Spotify account',
+=======
+    description: 'Spotify commands',
+    options: [
+      {
+        type: 1,           // SUB_COMMAND
+        name: 'login',
+        description: 'Authorize with Spotify',
+>>>>>>> 36f4080 (spotify)
       },
       {
         name: 'toptracks',
@@ -36,14 +48,19 @@ const commands = [
   },
 ];
 
-const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-
 (async () => {
   try {
     console.log('Started refreshing application (/) commands.');
 
     await rest.put(
+<<<<<<< HEAD
       Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), // Use Guild Commands for faster updates
+=======
+      Routes.applicationGuildCommands(
+        process.env.CLIENT_ID,
+        process.env.GUILD_ID
+      ),
+>>>>>>> 36f4080 (spotify)
       { body: commands },
     );
 

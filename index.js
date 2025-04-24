@@ -1,84 +1,73 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
-const RE2 = require('re2');
-const http = require('http');
-const axios = require('axios');
 const express = require('express');
+const axios = require('axios');
+const querystring = require('querystring');
 const Groq = require('groq-sdk');
 const fetch = require('node-fetch');
 const querystring = require('querystring');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-let client;
-let bot_active = false;
-const userTokens = {}; // Store user tokens in memory
-const app = express();
+const userTokens = {};        // Store Spotify tokens per user
+const chatMemory = {};        // Store chat history per user
 
+const app = express();
+const PORT = process.env.PORT || 3000;
+// Function to exchange the authorization code for tokens
+async function exchangeSpotifyCodeForTokens(code) {
+  const response = await axios.post('https://accounts.spotify.com/api/token', querystring.stringify({
+    grant_type: 'authorization_code',
+    code,
+    redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
+    client_id: process.env.SPOTIFY_CLIENT_ID,
+    client_secret: process.env.SPOTIFY_CLIENT_SECRET,
+  }), {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+  });
+
+  return {
+    access_token: response.data.access_token,
+    refresh_token: response.data.refresh_token,
+  };
+}
+const interactionToUserMap = {}; // Temporary mapping of interaction IDs to user IDs
 
 app.get('/callback', async (req, res) => {
-  const code = req.query.code;
-  const state = req.query.state; // This is the userId or interaction ID
+  const { code, state: interactionId } = req.query; // Use 'state' as the interaction ID
 
-  if (!code || !state) {
-    console.error('Missing code or state in the callback request.');
-    return res.status(400).send('Missing code or state');
+  console.log('Callback received:', { code, interactionId }); // Debugging log
+
+  if (!code || !interactionId) {
+    console.error('Missing code or interactionId in the callback URL.');
+    return res.status(400).json({ error: 'Missing code or interactionId in the callback URL.' });
+  }
+
+  // Retrieve the user ID from the interaction-to-user mapping
+  const userId = interactionToUserMap[interactionId];
+  if (!userId) {
+    console.error('No user ID found for interaction ID:', interactionId);
+    return res.status(400).json({ error: 'Invalid interaction ID.' });
   }
 
   try {
-    console.log('Exchanging code for token...');
-    const tokenResponse = await axios.post('https://accounts.spotify.com/api/token', querystring.stringify({
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
-      client_id: process.env.SPOTIFY_CLIENT_ID,
-      client_secret: process.env.SPOTIFY_CLIENT_SECRET,
-    }), {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    });
+    const tokens = await exchangeSpotifyCodeForTokens(code);
+    userTokens[userId] = tokens; // Save tokens for the correct user ID
 
-    const { access_token, refresh_token, expires_in } = tokenResponse.data;
+    console.log(`Tokens stored for userId: ${userId}`, tokens); // Debugging log
 
-    console.log('Token exchange successful:', { access_token, refresh_token });
+    // Clean up the mapping to avoid memory leaks
+    delete interactionToUserMap[interactionId];
 
-    // Store the tokens for the user
-    userTokens[state] = {
-      access_token,
-      refresh_token,
-      expires_at: Date.now() + expires_in * 1000, // Calculate expiration time
-    };
-
-    console.log('User tokens updated:', userTokens[state]);
-
-
-    // Send a DM to the user on Discord
-    const user = await client.users.fetch(state);
-    if (user) {
-      await user.send(
-        "You have successfully logged in to Spotify! 🎉 You can now use the `/spotify toptracks` command to view your top tracks."
-      );
-      console.log(`Sent a DM to user ${state}`);
-    } else {
-      console.error(`Failed to fetch user with ID ${state}`);
-    }
-
-    // Respond to the callback request with HTML
-    res.send(`
-      <html>
-        <body>
-          <script>
-            window.close();
-          </script>
-          <p>You have successfully logged in to Spotify! You can now close this window.</p>
-          <p>You can now use the <strong>/spotify toptracks</strong> command to view your top tracks.</p>
-        </body>
-      </html>
-    `);
-  } catch (err) {
-    console.error('Error exchanging code for token:', err.response?.data || err.message);
+    res.status(200).send('Spotify login successful! You can now use the bot commands.');
+  } catch (error) {
+    console.error('Error during Spotify callback:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to authenticate with Spotify.' });
   }
 });
+
+
 
 function createClient() {
   client = new Client({
@@ -99,59 +88,86 @@ function createClient() {
   client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     const userId = interaction.user.id;
+  
     if (interaction.commandName === 'spotify') {
       const sub = interaction.options.getSubcommand();
   
       if (sub === 'login') {
+        console.log('User ID:', userId);
         const scopes = 'user-top-read';
         const authUrl = `https://accounts.spotify.com/authorize?${querystring.stringify({
           response_type: 'code',
           client_id: process.env.SPOTIFY_CLIENT_ID,
           scope: scopes,
           redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
-          state: interaction.id, // Use interaction ID as the state
+          state: interaction.id, // Pass interaction ID as state
         })}`;
-      
-        console.log('Generated Spotify auth URL:', authUrl);
-      
-        // Store the interaction in a cache
-        if (!client.interactions) client.interactions = new Map();
-        client.interactions.set(interaction.id, interaction);
-      
+  
+        // Map the interaction ID to the user ID
+        interactionToUserMap[interaction.id] = userId;
+  
+        console.log('Generated Spotify auth URL:', authUrl); // Log the URL for debugging
+        console.log('State (interactionId):', interaction.id); // Log the interaction ID being passed as state
+  
         try {
+          // Acknowledge the interaction immediately
           await interaction.reply({
             content: `Click [here](${authUrl}) to log in to Spotify.`,
-            flags: 64, // Makes the message visible only to the user
+            flags: 64, // Use flags instead of ephemeral
           });
         } catch (err) {
-          console.error('Failed to reply to interaction:', err);
+          console.error('Error sending interaction reply:', err);
         }
       }
-
-      if (sub === 'toptracks') {
+            if (sub === 'toptracks') {
+        console.log('User ID:', userId);
+        console.log('Stored tokens:', userTokens);
+      
+        const tokens = userTokens[userId];
+        if (!tokens) {
+          console.log('Token not found for userId:', userId);
+          try {
+            if (!interaction.replied && !interaction.deferred) {
+              await interaction.reply({
+                content: '⚠️ Please log in with `/spotify login` first.',
+                flags: 64, // Use flags instead of ephemeral
+              });
+            }
+          } catch (err) {
+            console.error('Error sending interaction reply:', err);
+          }
+          return;
+        }
+      
         try {
-          await interaction.deferReply();
+          if (!interaction.deferred && !interaction.replied) {
+            await interaction.deferReply(); // Acknowledge the interaction
+          }
+        } catch (e) {
+          console.error('Error deferring reply:', e);
+          return; // Stop further processing if deferReply fails
+        }
       
-          let token = userTokens[userId]?.access_token;
+        try {
+          const res = await axios.get('https://api.spotify.com/v1/me/top/tracks', {
+            headers: { Authorization: `Bearer ${tokens.access_token}` },
+            params: { time_range: 'long_term', limit: 5 },
+          });
+          const items = res.data.items || [];
       
-          const topTracks = await getTopTracks();
-      
-          if (!topTracks || topTracks.length === 0) {
-            return interaction.editReply("No top tracks found. Please listen to more music on Spotify!");
+          if (items.length === 0) {
+            return interaction.editReply('🎶 No top tracks found.');
           }
       
-          const embeds = topTracks.map(track => ({
-            title: track.name,
-            url: track.external_urls.spotify,
-            description: `By ${track.artists.map(artist => artist.name).join(', ')}`,
-            thumbnail: { url: track.album.images[0]?.url },
-            footer: { text: `Album: ${track.album.name}` },
-          }));
-      
-          await interaction.editReply({ embeds });
-        } catch (err) {
-          console.error('Spotify error:', err);
-          await interaction.editReply("Failed to fetch top tracks. Please ensure you are logged in to Spotify.");
+          const list = items.map((t, i) => `${i + 1}. **${t.name}** by ${t.artists.map(a => a.name).join(', ')}`).join('\n');
+          return interaction.editReply(`🎵 Your Top 5 Tracks:\n${list}`);
+        } catch (e) {
+          console.error('Fetch top tracks error:', e.response?.data || e.message);
+          try {
+            return interaction.editReply('❌ Failed to fetch top tracks. Try again later.');
+          } catch (editError) {
+            console.error('Error editing reply:', editError);
+          }
         }
       }
     }
@@ -195,15 +211,8 @@ function createClient() {
         await interaction.editReply("Sorry, something went wrong.");
       }
     } else if (interaction.commandName === 'clear') {
-      try {
-        // Acknowledge the interaction
-        await interaction.reply("Your chat memory has been cleared.");
-  
-        // Clear the user's chat memory
-        chatMemory[userId] = [];
-      } catch (err) {
-        console.error('Error handling clear command:', err);
-      }
+      chatMemory[userId] = [];
+      await interaction.reply("Your chat memory has been cleared.");
     }
   });
 
@@ -233,15 +242,12 @@ function createClient() {
   });
 }
 
-
 function loginBot() {
   createClient();
   client.login(process.env.DISCORD_TOKEN)
     .then(() => console.log('Logged in successfully'))
     .catch(console.error);
 }
-
-const PORT = process.env.PORT || 3000;
 
 // Default route for non-matching paths
 app.get('/', (req, res) => {
