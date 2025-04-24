@@ -85,7 +85,17 @@ app.get('/callback', async (req, res) => {
 
     console.log('User tokens updated:', userTokens[state]);
 
-    res.send('You have successfully logged in to Spotify! You can now use the /spotify toptracks command.');
+    // Serve an HTML page that closes the window
+    res.send(`
+      <html>
+        <body>
+          <script>
+            window.close();
+          </script>
+          <p>You have successfully logged in to Spotify! You can now close this window.</p>
+        </body>
+      </html>
+    `);
   } catch (err) {
     console.error('Error exchanging code for token:', err.response?.data || err.message);
     res.status(500).send('Failed to log in to Spotify.');
