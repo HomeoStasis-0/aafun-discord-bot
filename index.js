@@ -135,6 +135,7 @@ function createClient() {
     const meowRegex = new RE2('\\bmeow\\b');
     const femboyRegex = new RE2('\\bfemboy\\b');
     const fifteenGirlRegex = new RE2('\\b15\\b.*\\bgirl\\b|\\bgirl\\b.*\\b15\\b');
+    const communismRegex = new RE2('\\bcommunism\\b');
 
     console.log(`Testing regex patterns against message content...`);
 
@@ -229,6 +230,21 @@ function createClient() {
         }, 5000);
       });
     }
+    else if (communismRegex.test(content_lower)) {
+      bot_active = true;
+      console.log('Matched a keyword, sending response');
+      message.channel.send('https://tenor.com/view/cat-asian-chinese-silly-ccp-gif-17771773925036748435')
+      .then(msg => {
+        console.log('Response sent successfully');
+        setTimeout(() => {
+          msg.delete()
+            .then(() => console.log('Response deleted'))
+            .catch(error => console.error('Error deleting response:', error));
+        }, 5000);
+      }
+    )
+    }
+    
     else {
       bot_active = false;
       console.log('No keyword matched');
