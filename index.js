@@ -14,44 +14,10 @@ let bot_active = false;
 const userTokens = {}; // Store user tokens in memory
 const app = express();
 
-// Function to refresh the Spotify access token
-async function refreshAccessToken(userId) {
-  const refreshToken = userTokens[userId]?.refresh_token;
-
-  if (!refreshToken) {
-    console.error(`No refresh token found for user ${userId}`);
-    throw new Error('Refresh token not found');
-  }
-
-  try {
-    const tokenResponse = await axios.post('https://accounts.spotify.com/api/token', querystring.stringify({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: process.env.SPOTIFY_CLIENT_ID,
-      client_secret: process.env.SPOTIFY_CLIENT_SECRET,
-    }), {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    });
-
-    const { access_token, expires_in } = tokenResponse.data;
-
-    // Update the user's tokens
-    userTokens[userId].access_token = access_token;
-    userTokens[userId].expires_at = Date.now() + expires_in * 1000;
-
-    console.log(`Access token refreshed for user ${userId}`);
-    return access_token;
-  } catch (err) {
-    console.error(`Error refreshing access token for user ${userId}:`, err.response?.data || err.message);
-    throw new Error('Failed to refresh access token');
-  }
-}
 
 app.get('/callback', async (req, res) => {
   const code = req.query.code;
-  const state = req.query.state; // This is the userId
+  const state = req.query.state; // This is the userId or interaction ID
 
   if (!code || !state) {
     console.error('Missing code or state in the callback request.');
@@ -85,7 +51,19 @@ app.get('/callback', async (req, res) => {
 
     console.log('User tokens updated:', userTokens[state]);
 
-    // Serve an HTML page that closes the window
+
+    // Send a DM to the user on Discord
+    const user = await client.users.fetch(state);
+    if (user) {
+      await user.send(
+        "You have successfully logged in to Spotify! 🎉 You can now use the `/spotify toptracks` command to view your top tracks."
+      );
+      console.log(`Sent a DM to user ${state}`);
+    } else {
+      console.error(`Failed to fetch user with ID ${state}`);
+    }
+
+    // Respond to the callback request with HTML
     res.send(`
       <html>
         <body>
@@ -93,12 +71,12 @@ app.get('/callback', async (req, res) => {
             window.close();
           </script>
           <p>You have successfully logged in to Spotify! You can now close this window.</p>
+          <p>You can now use the <strong>/spotify toptracks</strong> command to view your top tracks.</p>
         </body>
       </html>
     `);
   } catch (err) {
     console.error('Error exchanging code for token:', err.response?.data || err.message);
-    res.status(500).send('Failed to log in to Spotify.');
   }
 });
 
@@ -131,34 +109,35 @@ function createClient() {
           client_id: process.env.SPOTIFY_CLIENT_ID,
           scope: scopes,
           redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
-          state: userId,
+          state: interaction.id, // Use interaction ID as the state
         })}`;
       
-        console.log('Generated Spotify auth URL:', authUrl); // Log the URL for debugging
+        console.log('Generated Spotify auth URL:', authUrl);
       
-        // Send the login link as an ephemeral message
-        await interaction.reply({
-          content: `Click [here](${authUrl}) to log in to Spotify.`,
-          ephemeral: true, // Makes the message visible only to the user
-        });
-      }       if (sub === 'toptracks') {
-        let token = userTokens[userId]?.access_token;
-      
-        // Check if the token is expired
-        if (!token || Date.now() >= userTokens[userId]?.expires_at) {
-          try {
-            console.log(`Access token expired for user ${userId}. Refreshing...`);
-            token = await refreshAccessToken(userId);
-          } catch (err) {
-            return interaction.reply("Failed to refresh your Spotify access token. Please log in again using `/spotify login`.");
-          }
-        }
+        // Store the interaction in a cache
+        if (!client.interactions) client.interactions = new Map();
+        client.interactions.set(interaction.id, interaction);
       
         try {
+          await interaction.reply({
+            content: `Click [here](${authUrl}) to log in to Spotify.`,
+            flags: 64, // Makes the message visible only to the user
+          });
+        } catch (err) {
+          console.error('Failed to reply to interaction:', err);
+        }
+      }
+
+      if (sub === 'toptracks') {
+        try {
+          await interaction.deferReply();
+      
+          let token = userTokens[userId]?.access_token;
+      
           const topTracks = await getTopTracks();
       
           if (!topTracks || topTracks.length === 0) {
-            return interaction.reply("No top tracks found. Please listen to more music on Spotify!");
+            return interaction.editReply("No top tracks found. Please listen to more music on Spotify!");
           }
       
           const embeds = topTracks.map(track => ({
@@ -169,10 +148,10 @@ function createClient() {
             footer: { text: `Album: ${track.album.name}` },
           }));
       
-          await interaction.reply({ embeds });
+          await interaction.editReply({ embeds });
         } catch (err) {
           console.error('Spotify error:', err);
-          await interaction.reply("Failed to fetch top tracks. Please ensure you are logged in to Spotify.");
+          await interaction.editReply("Failed to fetch top tracks. Please ensure you are logged in to Spotify.");
         }
       }
     }
@@ -216,8 +195,15 @@ function createClient() {
         await interaction.editReply("Sorry, something went wrong.");
       }
     } else if (interaction.commandName === 'clear') {
-      chatMemory[userId] = [];
-      await interaction.reply("Your chat memory has been cleared.");
+      try {
+        // Acknowledge the interaction
+        await interaction.reply("Your chat memory has been cleared.");
+  
+        // Clear the user's chat memory
+        chatMemory[userId] = [];
+      } catch (err) {
+        console.error('Error handling clear command:', err);
+      }
     }
   });
 
