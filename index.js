@@ -4,8 +4,6 @@ const express = require('express');
 const axios = require('axios');
 const querystring = require('querystring');
 const Groq = require('groq-sdk');
-const fetch = require('node-fetch');
-const querystring = require('querystring');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const userTokens = {};        // Store Spotify tokens per user
@@ -83,7 +81,6 @@ function createClient() {
   });
 
   const chatMemory = {}; 
-
 
   client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
