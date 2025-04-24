@@ -136,6 +136,8 @@ function createClient() {
     const femboyRegex = new RE2('\\bfemboy\\b');
     const fifteenGirlRegex = new RE2('\\b15\\b.*\\bgirl\\b|\\bgirl\\b.*\\b15\\b');
     const communismRegex = new RE2('\\bcommunism\\b');
+    const kysRegex = new RE2('\\bkys\\b');
+    const kmsRegex = new RE2('\\bkms\\b');
 
     console.log(`Testing regex patterns against message content...`);
 
@@ -243,6 +245,19 @@ function createClient() {
         }, 5000);
       }
     )
+    }
+    else if (kysRegex.test(content_lower) || kmsRegex.test(content_lower)) {
+      bot_active = true;
+      console.log('Matched a keyword, sending response');
+      message.channel.send('https://tenor.com/view/high-tier-human-low-tier-god-ltg-love-yourself-lowtiergod-gif-4914755758940822771')
+      .then(msg => {
+        console.log('Response sent successfully');
+        setTimeout(() => {
+          msg.delete()
+            .then(() => console.log('Response deleted'))
+            .catch(error => console.error('Error deleting response:', error));
+        }, 5000);
+      })
     }
     
     else {
