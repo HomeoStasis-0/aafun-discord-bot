@@ -25,12 +25,12 @@ function createClient() {
 
   const chatMemory = {}; 
 
-  
   client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
   
     if (interaction.commandName === 'chat') {
       const userMessage = interaction.options.getString('message');
+      await interaction.deferReply();
   
       try {
         const userId = interaction.user.id;
@@ -50,7 +50,7 @@ function createClient() {
           lowerMessage.includes("your name") ||
           lowerMessage.includes("who you are")
         ) {
-          await interaction.reply(`My name is ${client.user.username}!`);
+          await interaction.editReply(`My name is ${client.user.username}!`);
           return;
         }
   
@@ -60,7 +60,7 @@ function createClient() {
           lowerMessage.includes("what is my name") ||
           lowerMessage.includes("who am i")
         ) {
-          await interaction.reply(`Your name is ${userNickname}!`);
+          await interaction.editReply(`Your name is ${userNickname}!`);
           return;
         }
   
@@ -71,7 +71,7 @@ function createClient() {
           lowerMessage.includes("who is your dad") ||
           lowerMessage.includes("who's your dad")
         ) {
-          await interaction.reply("My father is Javi, also known as 𝓯𝓻𝓮𝓪𝓴𝔂.");
+          await interaction.editReply("My father is Javi, also known as 𝓯𝓻𝓮𝓪𝓴𝔂.");
           return;
         }
   
@@ -84,72 +84,39 @@ function createClient() {
   
         // Get AI response with memory
         const response = await groq.chat.completions.create({
-          model: "mistral-saba-24b",
+          model: "mixtral-8x7b-32768",
           messages: chatMemory[userId],
         });
   
         const reply = response.choices[0]?.message?.content || "Sorry, I couldn't process that request.";
         const maxLength = 2000;
         const replyChunks = [];
-  
+        
         // Split the reply into chunks if it exceeds 2000 characters
         for (let i = 0; i < reply.length; i += maxLength) {
           replyChunks.push(reply.substring(i, i + maxLength));
         }
-  
+        
         // Store bot's response in memory
         chatMemory[userId].push({ role: "assistant", content: reply });
-  
+        
         // Send the reply chunks one by one
-        if (!interaction.replied) {
-          await interaction.reply(replyChunks.shift());
-        }
         for (const chunk of replyChunks) {
           await interaction.followUp(chunk);
         }
-  
+        
       } catch (error) {
         console.error('Error fetching AI response:', error.response?.data || error.message);
-  
-        // Handle specific Groq model terms error
-        if (error.response?.data?.error?.code === "model_terms_required") {
-          const termsUrl = "https://console.groq.com/playground?model=mistral-saba-24b";
-          const errorMessage = `The model requires terms acceptance. Please have the org admin accept the terms at ${termsUrl}`;
-          console.error(errorMessage);
-  
-          if (!interaction.replied) {
-            await interaction.reply(errorMessage);
-          } else {
-            console.error("Interaction has already been acknowledged.");
-          }
-          return;
-        }
-  
-        // Handle general errors
-        if (!interaction.replied) {
-          await interaction.reply("Sorry, I couldn't process that request.");
-        } else {
-          console.error("Interaction has already been acknowledged.");
-        }
-      }
-    } else if (interaction.commandName === 'clear') {
-      const userId = interaction.user.id;
-      if (chatMemory[userId] && chatMemory[userId].length > 0) {
-        chatMemory[userId] = [];
-        await interaction.reply({ content: "Your chat memory has been cleared.", ephemeral: true })
-        .then(() => {
-          console.log('Response sent successfully');
-        })
-        .catch(error => console.error('Error sending response:', error));
-      } else {
-        await interaction.reply({ content: "Your chat memory is already empty.", ephemeral: true })
-        .then(() => {
-          console.log('Response sent successfully');
-        })
-        .catch(error => console.error('Error sending response:', error));
+        await interaction.editReply("Sorry, I couldn't process that request.");
       }
     }
+    else if (interaction.commandName === 'clear') {
+      const userId = interaction.user.id;
+      chatMemory[userId] = [];
+      await interaction.reply("Your chat memory has been cleared.");
+    }
   });
+  
 
   client.on('messageCreate', message => {
     console.log(`Received message: ${message.content}`);  // Log received messages
@@ -167,8 +134,7 @@ function createClient() {
     const glorpshitRegex = new RE2('\\bglorpshit\\b');
     const meowRegex = new RE2('\\bmeow\\b');
     const femboyRegex = new RE2('\\bfemboy\\b');
-    const bombardiro_crocodillo = new RE2('\\bbombardiro crocodillo\\b');
-    const chicken_jockeyRegex = new RE2('\\bchicken jockey\\b');
+    const fifteenGirlRegex = new RE2('\\b15\\b.*\\bgirl\\b|\\bgirl\\b.*\\b15\\b');
 
     console.log(`Testing regex patterns against message content...`);
 
@@ -250,10 +216,10 @@ function createClient() {
         }, 5000);
       })
     }
-    else if (bombardiro_crocodillo.test(content_lower)) {
-      bot_active = true
-      console.log('Matched a keyword, sending response');
-      message.channel.send('https://tenor.com/view/bombardiro-crocodilo-bombardino-bombarillo-crocodillo-gif-11502489947518545947')
+    else if (fifteenGirlRegex.test(content_lower)) {
+      bot_active = true;
+      console.log('Matched "15" and "girl" in the same sentence, sending response');
+      message.channel.send('minecraft movie incident')
       .then(msg => {
         console.log('Response sent successfully');
         setTimeout(() => {
@@ -261,20 +227,7 @@ function createClient() {
             .then(() => console.log('Response deleted'))
             .catch(error => console.error('Error deleting response:', error));
         }, 5000);
-      })
-    }
-    else if (chicken_jockeyRegex.test(content_lower)) {
-      bot_active = true
-      console.log('Matched a keyword, sending response');
-      message.channel.send('https://tenor.com/view/minecraft-minecraft-movie-a-minecraft-movie-steve-jack-black-gif-4079785775268000209')
-      .then(msg => {
-        console.log('Response sent successfully');
-        setTimeout(() => {
-          msg.delete()
-            .then(() => console.log('Response deleted'))
-            .catch(error => console.error('Error deleting response:', error));
-        }, 5000);
-      })
+      });
     }
     else {
       bot_active = false;
@@ -297,25 +250,13 @@ function loginBot() {
     .catch(error => console.error('Error logging in:', error));
 }
 
+// Create a simple HTTP server to prevent Heroku boot timeout
 const PORT = process.env.PORT || 3000;
-const server = http.createServer((req, res) => {
+http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Bot is running\n');
-});
-
-server.listen(PORT, () => {
+}).listen(PORT, () => {
   console.log(`Server is listening on port ${PORT}`);
-});
-
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`Port ${PORT} is already in use, trying another port...`);
-    server.listen(0, () => {
-      console.log(`Server is now listening on port ${server.address().port}`);
-    });
-  } else {
-    throw err;
-  }
 });
 
 // Initial login attempt
