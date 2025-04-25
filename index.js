@@ -31,6 +31,7 @@ async function exchangeSpotifyCodeForTokens(code) {
     return {
       access_token: response.data.access_token,
       refresh_token: response.data.refresh_token,
+      expires_in: response.data.expires_in,
     };
   } catch (error) {
     console.error('Error exchanging Spotify code for tokens:', error.response?.data || error.message);
@@ -55,7 +56,10 @@ app.get('/callback', async (req, res) => {
 
   try {
     const tokens = await exchangeSpotifyCodeForTokens(code);
-    userTokens[userId] = tokens;
+    userTokens[userId] = {
+      ...tokens,
+      expires_at: Date.now() + tokens.expires_in * 1000, // Calculate token expiration time
+    };
     delete interactionToUserMap[interactionId];
     console.log(`Tokens stored for userId: ${userId}`, tokens);
     res.status(200).send('Spotify login successful! You can now use the bot commands.');
@@ -65,6 +69,35 @@ app.get('/callback', async (req, res) => {
   }
 });
 
+async function refreshSpotifyTokens(userId) {
+  try {
+    const tokens = userTokens[userId];
+    if (!tokens || !tokens.refresh_token) {
+      throw new Error('No refresh token available.');
+    }
+
+    const response = await axios.post('https://accounts.spotify.com/api/token', querystring.stringify({
+      grant_type: 'refresh_token',
+      refresh_token: tokens.refresh_token,
+      client_id: process.env.SPOTIFY_CLIENT_ID,
+      client_secret: process.env.SPOTIFY_CLIENT_SECRET,
+    }), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+
+    userTokens[userId] = {
+      ...tokens,
+      access_token: response.data.access_token,
+      expires_in: response.data.expires_in,
+    };
+    console.log(`Tokens refreshed for userId: ${userId}`);
+  } catch (error) {
+    console.error('Error refreshing Spotify tokens:', error.response?.data || error.message);
+    throw new Error('Failed to refresh Spotify tokens.');
+  }
+}
 function createClient() {
   const client = new Client({
     intents: [
@@ -122,7 +155,16 @@ function createClient() {
           }
           return;
         }
-
+        if (Date.now() >= tokens.expires_at) {
+          try {
+            await refreshSpotifyTokens(userId);
+            tokens = userTokens[userId];
+          } catch (err) {
+            console.error('Error refreshing tokens:', err);
+            return interaction.reply('⚠️ Failed to refresh Spotify tokens. Please log in again.');
+          }
+        }
+  
         try {
           if (!interaction.replied && !interaction.deferred) {
             await interaction.deferReply();
@@ -131,27 +173,31 @@ function createClient() {
           console.error('Error deferring reply:', e);
           return;
         }
-
+  
+        try {
           const res = await axios.get('https://api.spotify.com/v1/me/top/tracks', {
             headers: { Authorization: `Bearer ${tokens.access_token}` },
             params: { time_range: 'short_term', limit: 5 },
           });
-
+  
           const items = res.data.items || [];
           if (items.length === 0) {
             return interaction.editReply('🎶 No top tracks found.');
           }
-
-          
-          const embeds = items.map((t, i) => 
+  
+          const embeds = items.map((t, i) =>
             new EmbedBuilder()
               .setColor('#1DB954') // Spotify green
               .setTitle(`${i + 1}. ${t.name}`)
               .setDescription(`By ${t.artists.map(a => a.name).join(', ')}\nAlbum: ${t.album.name}`)
               .setThumbnail(t.album.images[0]?.url || null) // Small album cover
           );
-          
+  
           await interaction.editReply({ content: 'Your Top 5 Tracks 👾:', embeds });
+        } catch (err) {
+          console.error('Error fetching top tracks:', err);
+          await interaction.editReply('⚠️ Failed to fetch your top tracks.');
+        }
       }
     }
 
