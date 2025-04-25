@@ -15,21 +15,26 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 async function exchangeSpotifyCodeForTokens(code) {
-  const response = await axios.post('https://accounts.spotify.com/api/token', querystring.stringify({
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
-    client_id: process.env.SPOTIFY_CLIENT_ID,
-    client_secret: process.env.SPOTIFY_CLIENT_SECRET,
-  }), {
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-  });
-  return {
-    access_token: response.data.access_token,
-    refresh_token: response.data.refresh_token,
-  };
+  try {
+    const response = await axios.post('https://accounts.spotify.com/api/token', querystring.stringify({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
+      client_id: process.env.SPOTIFY_CLIENT_ID,
+      client_secret: process.env.SPOTIFY_CLIENT_SECRET,
+    }), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+    return {
+      access_token: response.data.access_token,
+      refresh_token: response.data.refresh_token,
+    };
+  } catch (error) {
+    console.error('Error exchanging Spotify code for tokens:', error.response?.data || error.message);
+    throw new Error('Failed to exchange Spotify code for tokens.');
+  }
 }
 
 app.get('/callback', async (req, res) => {
