@@ -43,7 +43,7 @@ const commands = [
   },
 ];
 
-(async () => {
+(async () => { 
   try {
     console.log('Started refreshing application (/) commands.');
 
