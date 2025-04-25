@@ -4,6 +4,7 @@ const express = require('express');
 const axios = require('axios');
 const querystring = require('querystring');
 const Groq = require('groq-sdk');
+const { EmbedBuilder } = require('discord.js');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const userTokens = {};
@@ -133,11 +134,16 @@ function createClient() {
             return interaction.editReply('🎶 No top tracks found.');
           }
 
-          const list = items.map((t, i) =>
-            `${i + 1}. **${t.name}** by ${t.artists.map(a => a.name).join(', ')}\nAlbum Cover: ${t.album.images[0]?.url || 'No image available'}`
-          ).join('\n');
           
-          return interaction.editReply(`🎵 Your Top 5 Tracks:\n${list}`);
+          const embeds = items.map((t, i) => 
+            new EmbedBuilder()
+              .setColor('#1DB954') // Spotify green
+              .setTitle(`${i + 1}. ${t.name}`)
+              .setDescription(`By ${t.artists.map(a => a.name).join(', ')}\nAlbum: ${t.album.name}`)
+              .setThumbnail(t.album.images[0]?.url || null) // Small album cover
+          );
+          
+          await interaction.editReply({ content: '🎵 Your Top 5 Tracks:', embeds });
       }
     }
 
