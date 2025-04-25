@@ -134,16 +134,15 @@ function createClient() {
           }
 
           const list = items.map((t, i) =>
-            `${i + 1}. **[${t.name}](${t.external_urls.spotify})** by ${t.artists.map(a => a.name).join(', ')}\n` +
-            `[![Album Cover](${t.album.images[0]?.url || 'https://via.placeholder.com/150'})](${t.external_urls.spotify})`
-          ).join('\n\n');
+            `${i + 1}. **[${t.name}](${t.external_urls.spotify})** by ${t.artists.map(a => a.name).join(', ')}`
+          ).join('\n');
           
           return interaction.editReply(`🎵 Your Top 5 Tracks:\n${list}`);
       }
     }
 
     if (interaction.commandName === 'chat') {
-      await interaction.deferReplys();
+      await interaction.deferReply();
       const userMessage = interaction.options.getString('message');
 
       try {
