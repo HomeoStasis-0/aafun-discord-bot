@@ -195,8 +195,9 @@ function createClient() {
     }
   });
 
-  client.on('messageCreate', message => {
+  client.on('messageCreate', async message => {
     if (message.author.bot) return;
+  
     const content_lower = message.content.toLowerCase();
     const matchers = [
       [/\berm+\b/, 'https://tenor.com/view/omori-erm-uuuh-uhh-huh-gif-15238876008948972055'],
@@ -211,10 +212,17 @@ function createClient() {
       [/\bkys\b|\bkms\b/, 'https://tenor.com/view/high-tier-human-low-tier-god-ltg-love-yourself-lowtiergod-gif-4914755758940822771'],
       [/\bkhanh\b/, 'https://cdn.discordapp.com/attachments/1277012851352932516/1346031380013781043/khan.gif']
     ];
-
+  
     for (const [regex, url] of matchers) {
       if (regex.test(content_lower) && url) {
-        message.channel.send(url).then(msg => setTimeout(() => msg.delete().catch(console.error), 5000));
+        try {
+          const sentMessage = await message.channel.send(url);
+          setTimeout(() => {
+            sentMessage.delete().catch(err => console.error('Error deleting message:', err));
+          }, 5000);
+        } catch (err) {
+          console.error('Error sending message:', err);
+        }
         return;
       }
     }
