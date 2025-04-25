@@ -133,7 +133,7 @@ function createClient() {
 
           const res = await axios.get('https://api.spotify.com/v1/me/top/tracks', {
             headers: { Authorization: `Bearer ${tokens.access_token}` },
-            params: { time_range: 'long_term', limit: 5 },
+            params: { time_range: 'short_term', limit: 5 },
           });
 
           const items = res.data.items || [];
