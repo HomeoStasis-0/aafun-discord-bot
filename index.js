@@ -5,6 +5,7 @@ const axios = require('axios');
 const querystring = require('querystring');
 const Groq = require('groq-sdk');
 const { EmbedBuilder } = require('discord.js');
+const { exec } = require('child_process');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const userTokens = {};
@@ -151,6 +152,29 @@ function createClient() {
           );
           
           await interaction.editReply({ content: 'Your Top 5 Tracks 👾:', embeds });
+      }
+    }
+
+    if (interaction.commandName === 'restart') {
+      try {
+        await interaction.reply('🔄 Restarting the bot...');
+        console.log('Restarting the app using Heroku CLI...');
+  
+        // Execute the Heroku restart command
+        exec('heroku restart --app aafun-discord-app', (error, stdout, stderr) => {
+          if (error) {
+            console.error(`Error restarting app: ${error.message}`);
+            interaction.followUp('❌ Failed to restart the bot.');
+            return;
+          }
+          if (stderr) {
+            console.error(`stderr: ${stderr}`);
+          }
+          console.log(`stdout: ${stdout}`);
+        });
+      } catch (err) {
+        console.error('Error handling restart command:', err);
+        await interaction.reply('❌ Failed to restart the bot.');
       }
     }
 
