@@ -43,15 +43,13 @@ const commands = [
   try {
     console.log('Started refreshing application (/) commands.');
 
+    // Use Routes.applicationCommands for global commands
     await rest.put(
-      Routes.applicationGuildCommands(
-        process.env.CLIENT_ID,
-        process.env.GUILD_ID
-      ),
+      Routes.applicationCommands(process.env.CLIENT_ID),
       { body: commands },
     );
 
-    console.log('Successfully reloaded application (/) commands.');
+    console.log('Successfully reloaded application (/) commands globally.');
   } catch (error) {
     console.error(error);
   }
