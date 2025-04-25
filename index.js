@@ -42,11 +42,13 @@ app.get('/callback', async (req, res) => {
   console.log('Callback received:', { code, interactionId });
 
   if (!code || !interactionId) {
+    console.error('Missing code or interactionId in the callback URL.');
     return res.status(400).json({ error: 'Missing code or interactionId in the callback URL.' });
   }
 
   const userId = interactionToUserMap[interactionId];
   if (!userId) {
+    console.error('Invalid interaction ID:', interactionId);
     return res.status(400).json({ error: 'Invalid interaction ID.' });
   }
 
