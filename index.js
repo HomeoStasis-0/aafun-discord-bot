@@ -134,7 +134,7 @@ function createClient() {
           }
 
           const list = items.map((t, i) =>
-            `${i + 1}. **[${t.name}](${t.external_urls.spotify})** by ${t.artists.map(a => a.name).join(', ')}`
+            `${i + 1}. **${t.name}** by ${t.artists.map(a => a.name).join(', ')}\nAlbum Cover: ${t.album.images[0]?.url || 'No image available'}`
           ).join('\n');
           
           return interaction.editReply(`🎵 Your Top 5 Tracks:\n${list}`);
