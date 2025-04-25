@@ -143,7 +143,7 @@ function createClient() {
               .setThumbnail(t.album.images[0]?.url || null) // Small album cover
           );
           
-          await interaction.editReply({ content: '🎵 Your Top 5 Tracks:', embeds });
+          await interaction.editReply({ content: 'Your Top 5 Tracks 👾:', embeds });
       }
     }
 
