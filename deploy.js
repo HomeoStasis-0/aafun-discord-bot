@@ -1,3 +1,9 @@
+const { REST, Routes } = require('discord.js');
+require('dotenv').config();
+
+// instantiate REST client
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
 const commands = [
   {
     name: 'chat',
@@ -20,7 +26,7 @@ const commands = [
     description: 'Spotify commands',
     options: [
       {
-        type: 1, // SUB_COMMAND
+        type: 1,           // SUB_COMMAND
         name: 'login',
         description: 'Authorize with Spotify',
       },
