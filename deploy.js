@@ -1,8 +1,6 @@
-const { REST, Routes } = require('discord.js');
+const { REST } = require('@discordjs/rest');
+const { Routes } = require('discord-api-types/v10');
 require('dotenv').config();
-
-// instantiate REST client
-const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
 const commands = [
   {
@@ -26,13 +24,13 @@ const commands = [
     description: 'Spotify commands',
     options: [
       {
-        type: 1,           // SUB_COMMAND
+        type: 1, // SUB_COMMAND
         name: 'login',
         description: 'Authorize with Spotify',
       },
       {
         name: 'toptracks',
-        type: 1, // SUB_COMMAND type
+        type: 1, // SUB_COMMAND
         description: 'Get your top Spotify tracks',
       },
     ],
@@ -43,7 +41,9 @@ const commands = [
   },
 ];
 
-(async () => { 
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+(async () => {
   try {
     console.log('Started refreshing application (/) commands.');
 
