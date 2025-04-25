@@ -23,21 +23,12 @@ const commands = [
   },
   {
     name: 'spotify',
-<<<<<<< HEAD
-    description: 'Spotify integration commands',
-    options: [
-      {
-        name: 'login',
-        type: 1, // SUB_COMMAND type
-        description: 'Log in to your Spotify account',
-=======
     description: 'Spotify commands',
     options: [
       {
         type: 1,           // SUB_COMMAND
         name: 'login',
         description: 'Authorize with Spotify',
->>>>>>> 36f4080 (spotify)
       },
       {
         name: 'toptracks',
@@ -53,14 +44,10 @@ const commands = [
     console.log('Started refreshing application (/) commands.');
 
     await rest.put(
-<<<<<<< HEAD
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), // Use Guild Commands for faster updates
-=======
       Routes.applicationGuildCommands(
         process.env.CLIENT_ID,
         process.env.GUILD_ID
       ),
->>>>>>> 36f4080 (spotify)
       { body: commands },
     );
 
