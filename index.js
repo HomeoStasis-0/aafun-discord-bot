@@ -268,7 +268,10 @@ function createClient() {
 
     if (interaction.commandName === 'clear') {
       chatMemory[userId] = [];
-      await interaction.reply("Your chat memory has been cleared.");
+      await interaction.reply({
+        content: "Your chat memory has been cleared.",
+        flags: 64,
+      });
     }
   });
 
