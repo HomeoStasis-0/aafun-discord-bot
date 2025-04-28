@@ -241,7 +241,7 @@ function createClient() {
           return interaction.editReply(`Your name is ${userNickname}!`);
         }
 
-        if (lowerMessage.includes("who is your father") || lowerMessage.includes("who's your dad")) {
+        if (lowerMessage.includes("who is your father") || lowerMessage.includes("who is your dad")) {
           return interaction.editReply("My father is Javi, also known as 𝓯𝓻𝓮𝓪𝓴𝔂.");
         }
 
