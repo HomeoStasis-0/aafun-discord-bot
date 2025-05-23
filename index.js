@@ -6,14 +6,18 @@ const querystring = require('querystring');
 const Groq = require('groq-sdk');
 const { EmbedBuilder } = require('discord.js');
 const { exec } = require('child_process');
+const fs = require('fs');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const userTokens = {};
 const chatMemory = {};
 const interactionToUserMap = {};
+const birthday = {};
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
 
 async function exchangeSpotifyCodeForTokens(code) {
   try {
@@ -109,6 +113,49 @@ function createClient() {
 
   client.on('ready', () => {
     console.log(`We have logged in as ${client.user.tag}`);
+  
+    async function sendBirthdayGif(userId) {
+      try {
+        const channel = await client.channels.fetch('1303601244077690944');
+        if (!channel) {
+          console.error('Birthday channel not found!');
+          return;
+        }
+    await channel.send({
+      content: `<@${userId}> 🎉 Happy Birthday!`,
+      embeds: [
+        new EmbedBuilder()
+          .setImage('https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExMXBueGU3cnN1ZWUzeWpwYm5mb3kwaTYxdnplc3I1ajd1OTR6eGZiYSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Ca0pp3NF1B1jbp0a1A/giphy.gif')
+      ]
+    });
+      } catch (err) {
+        console.error(`Failed to send birthday GIF to channel for ${userId}:`, err);
+      }
+    }
+  
+    setInterval(async () => {
+      const filePath = './birthdays.txt';
+      if (!fs.existsSync(filePath)) return;
+      const today = new Date();
+      const todayStr = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const lines = fs.readFileSync(filePath, 'utf8').split('\n').filter(Boolean);
+    
+      console.log('Birthday check running. Today:', todayStr);
+    
+      for (const line of lines) {
+        const [userId, bday] = line.split(':');
+        if (!bday) continue;
+        const match = bday.match(/^(\d{4})-(\d{2})-(\d{2})$/) || [];
+        const [, year, month, day] = match; // <-- Add year
+        console.log('Checking:', { line, userId, bday, match });
+        console.log('Comparing:', `${month}-${day}`, 'vs', todayStr);
+        console.log('Condition:', month && day && `${month}-${day}` === todayStr);
+        if (month && day && `${month}-${day}` === todayStr) {
+          console.log(`Sending birthday GIF to ${userId}`);
+          await sendBirthdayGif(userId);
+        }
+      }
+    }, 12 * 60 * 60 * 1000); // Check every 12 hours
   });
 
   client.on('interactionCreate', async interaction => {
@@ -198,6 +245,28 @@ function createClient() {
           console.error('Error fetching top tracks:', err);
           await interaction.editReply('⚠️ Failed to fetch your top tracks.');
         }
+      }
+    }
+
+    if (interaction.commandName === 'birthday') {
+      const sub = interaction.options.getSubcommand();
+      if (sub === 'set') {
+        const bday = interaction.options.getString('date'); // Expecting YYYY-MM-DD
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(bday)) {
+          return interaction.reply({ content: 'Please use the format YYYY-MM-DD.', ephemeral: true });
+        }
+        birthday[userId] = bday;
+        // Append or update the user's birthday in the file
+        const filePath = './birthdays.txt';
+        let lines = [];
+        if (fs.existsSync(filePath)) {
+          lines = fs.readFileSync(filePath, 'utf8').split('\n').filter(Boolean);
+          // Remove any existing entry for this user
+          lines = lines.filter(line => !line.startsWith(`${userId}:`));
+        }
+        lines.push(`${userId}:${bday}`);
+        fs.writeFileSync(filePath, lines.join('\n'));
+        await interaction.reply({ content: `Your birthday has been set to ${bday}!`, ephemeral: true });
       }
     }
 
