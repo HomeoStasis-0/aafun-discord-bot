@@ -155,7 +155,7 @@ function createClient() {
           await sendBirthdayGif(userId);
         }
       }
-    }, 12 * 60 * 60 * 1000); // Check every 12 hours
+    }, 60 * 1000);// 12 * 60 * 60 * 1000); // Check every 12 hours
   });
 
   client.on('interactionCreate', async interaction => {
