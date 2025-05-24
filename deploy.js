@@ -38,26 +38,7 @@ const commands = [
   {
     name: 'restart',
     description: 'Restart the bot',
-  },
-  {
-  name: 'birthday',
-  description: 'Set or get your birthday',
-  options: [
-    {
-      type: 1,
-      name: 'set',
-      description: 'Set your birthday',
-      options: [
-        {
-          type: 3,
-          name: 'date',
-          description: 'Your birthday (YYYY-MM-DD)',
-          required: true,
-        },
-      ],
-    },
-  ],
-}
+  }
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);

@@ -116,7 +116,7 @@ function createClient() {
   
     async function sendBirthdayGif(userId) {
       try {
-        const channel = await client.channels.fetch('1303601244077690944');
+        const channel = await client.channels.fetch('1241466133744189551');
         if (!channel) {
           console.error('Birthday channel not found!');
           return;
@@ -155,7 +155,7 @@ function createClient() {
           await sendBirthdayGif(userId);
         }
       }
-    }, 12 * 60 * 60 * 1000); // Check every 12 hours
+    }, 60 * 1000);// 12 * 60 * 60 * 1000); // Check every 12 hours
   });
 
   client.on('interactionCreate', async interaction => {
@@ -245,28 +245,6 @@ function createClient() {
           console.error('Error fetching top tracks:', err);
           await interaction.editReply('⚠️ Failed to fetch your top tracks.');
         }
-      }
-    }
-
-    if (interaction.commandName === 'birthday') {
-      const sub = interaction.options.getSubcommand();
-      if (sub === 'set') {
-        const bday = interaction.options.getString('date'); // Expecting YYYY-MM-DD
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(bday)) {
-          return interaction.reply({ content: 'Please use the format YYYY-MM-DD.', ephemeral: true });
-        }
-        birthday[userId] = bday;
-        // Append or update the user's birthday in the file
-        const filePath = './birthdays.txt';
-        let lines = [];
-        if (fs.existsSync(filePath)) {
-          lines = fs.readFileSync(filePath, 'utf8').split('\n').filter(Boolean);
-          // Remove any existing entry for this user
-          lines = lines.filter(line => !line.startsWith(`${userId}:`));
-        }
-        lines.push(`${userId}:${bday}`);
-        fs.writeFileSync(filePath, lines.join('\n'));
-        await interaction.reply({ content: `Your birthday has been set to ${bday}!`, ephemeral: true });
       }
     }
 
