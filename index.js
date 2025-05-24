@@ -116,7 +116,7 @@ function createClient() {
   
     async function sendBirthdayGif(userId) {
       try {
-        const channel = await client.channels.fetch('1241466133744189551');
+        const channel = await client.channels.fetch('1303601244077690944');
         if (!channel) {
           console.error('Birthday channel not found!');
           return;
