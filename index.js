@@ -296,7 +296,7 @@ function createClient() {
         if (chatMemory[userId].length > 10) chatMemory[userId].shift();
 
         const response = await groq.chat.completions.create({
-          model: "llama3-70b-8192",
+          model: "llama-3.3-70b-versatile",
           messages: chatMemory[userId],
         });
 
