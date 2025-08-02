@@ -110,9 +110,9 @@ async function getRandomGif(searchTerm = '') {
       : 'https://api.giphy.com/v1/gifs/trending';
     
     const params = {
-      api_key: 'bswPcURbB4ZAAnurhY7SAGWHqsOeuGKZ',
+      api_key: process.env.GIPHY_API_KEY,
       limit: 50,
-      rating: 'pg-13'
+      rating: 'R'
     };
     
     if (searchTerm) {
