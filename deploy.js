@@ -38,6 +38,18 @@ const commands = [
   {
     name: 'restart',
     description: 'Restart the bot',
+  },
+  {
+    name: 'randomgif',
+    description: 'Get a random GIF from Giphy',
+    options: [
+      {
+        name: 'search',
+        type: 3, // STRING
+        description: 'Search term for the GIF (optional)',
+        required: false,
+      },
+    ],
   }
 ];
 

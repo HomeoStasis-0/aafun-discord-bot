@@ -102,6 +102,38 @@ async function refreshSpotifyTokens(userId) {
     throw new Error('Failed to refresh Spotify tokens.');
   }
 }
+
+async function getRandomGif(searchTerm = '') {
+  try {
+    const endpoint = searchTerm 
+      ? 'https://api.giphy.com/v1/gifs/search'
+      : 'https://api.giphy.com/v1/gifs/trending';
+    
+    const params = {
+      api_key: 'bswPcURbB4ZAAnurhY7SAGWHqsOeuGKZ',
+      limit: 50,
+      rating: 'pg-13'
+    };
+    
+    if (searchTerm) {
+      params.q = searchTerm;
+    }
+
+    const response = await axios.get(endpoint, { params });
+    const gifs = response.data.data;
+    
+    if (!gifs || gifs.length === 0) {
+      return null;
+    }
+    
+    const randomGif = gifs[Math.floor(Math.random() * gifs.length)];
+    return randomGif.images.original.url;
+  } catch (error) {
+    console.error('Error fetching random GIF:', error.response?.data || error.message);
+    return null;
+  }
+}
+
 function createClient() {
   const client = new Client({
     intents: [
@@ -188,7 +220,7 @@ function createClient() {
       }
 
       if (sub === 'toptracks') {
-        const tokens = userTokens[userId];
+        let tokens = userTokens[userId];
         if (!tokens) {
           try {
             if (!interaction.replied && !interaction.deferred) {
@@ -319,6 +351,73 @@ function createClient() {
         content: "Your chat memory has been cleared.",
         flags: 64,
       });
+    }
+
+    if (interaction.commandName === 'randomgif') {
+      const searchTerm = interaction.options.getString('search') || '';
+      
+      try {
+        await interaction.deferReply();
+        
+        // First, try to get a GIF from Giphy for ANY search term
+        const gifUrl = await getRandomGif(searchTerm);
+        
+        // If Giphy has results, use them
+        if (gifUrl) {
+          const embed = new EmbedBuilder()
+            .setColor('#FF6B6B')
+            .setTitle(searchTerm ? `Random GIF: ${searchTerm}` : 'Random GIF')
+            .setImage(gifUrl)
+            .setFooter({ text: 'Powered by Giphy' });
+
+          return interaction.editReply({ embeds: [embed] });
+        }
+        
+        // Only use special content if Giphy has no results
+        const specialContent = {
+          'rick': 'https://tenor.com/view/rickroll-roll-rick-never-gonna-give-you-up-gif-22113173',
+          'rickroll': 'https://tenor.com/view/rickroll-roll-rick-never-gonna-give-you-up-gif-22113173',
+          'sus': 'https://tenor.com/view/among-us-sus-suspicious-gif-19443613',
+          'amogus': 'https://tenor.com/view/among-us-sus-suspicious-gif-19443613',
+          'skeleton': 'https://tenor.com/view/berserk-skeleton-damn-bro-you-gif-25852196',
+          'skull': '💀',
+          'based': 'https://tenor.com/view/gigachad-chad-gif-20773266',
+          'chad': 'https://tenor.com/view/gigachad-chad-gif-20773266',
+          'cringe': 'https://tenor.com/view/cringe-gif-21464576',
+          'nah': 'https://tenor.com/view/nah-id-win-jjk-gif-8888717316917975261',
+          'bruh': 'https://tenor.com/view/bruh-gif-21934518'
+        };
+
+        const lowerSearchTerm = searchTerm.toLowerCase();
+        
+        // Check if there's a special fallback response
+        if (specialContent[lowerSearchTerm]) {
+          const content = specialContent[lowerSearchTerm];
+          
+          // If it's just text (like skull emoji), send as text
+          if (!content.startsWith('http')) {
+            return interaction.editReply(content);
+          }
+          
+          // If it's a URL, send as embed
+          const embed = new EmbedBuilder()
+            .setColor('#FF6B6B')
+            .setTitle(`${searchTerm} GIF`)
+            .setImage(content)
+            .setFooter({ text: 'Fallback Response (Giphy had no results)' });
+
+          return interaction.editReply({ embeds: [embed] });
+        }
+
+        // If no Giphy results AND no special content, show error
+        await interaction.editReply(searchTerm 
+          ? `❌ No GIFs found for "${searchTerm}". Try a different search term!`
+          : '❌ Failed to fetch a random GIF');
+          
+      } catch (err) {
+        console.error('Error handling randomgif command:', err);
+        await interaction.editReply('❌ Something went wrong while fetching the GIF.');
+      }
     }
   });
 
