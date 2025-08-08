@@ -1,0 +1,37 @@
+{
+  "name": "node-js-getting-started",
+  "private": true,
+  "description": "A sample Node.js app using Express",
+  "engines": {
+    "node": "18.x || 20.x || 22.x"
+  },
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "jest",
+    "postinstall": "node deploy.js"
+  },
+  "dependencies": {
+    "axios": "^1.9.0",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.5.0",
+    "ejs": "^3.1.10",
+    "express": "^5.0.1",
+    "groq-sdk": "^0.15.0",
+    "node-fetch": "^2.7.0",
+    "re2": "^1.21.4"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/heroku/node-js-getting-started"
+  },
+  "keywords": [
+    "node",
+    "heroku",
+    "express"
+  ],
+  "license": "MIT"
+}

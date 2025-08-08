@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<<<<<<< HEAD
+<<<<<<< HEAD
+  <%- include ("../partials/header.ejs") %>
+=======
+  <% include ../partials/header.ejs %>
+>>>>>>> 9e9765a (new UI)
+=======
+  <%- include ("../partials/header.ejs") %>
+>>>>>>> b10a4d7 (Upgrade ejs modules (#227))
+</head>
+
+<body>
+
+<<<<<<< HEAD
+<<<<<<< HEAD
+<%- include ("../partials/nav.ejs") %>
+=======
+<% include ../partials/nav.ejs %>
+>>>>>>> 9e9765a (new UI)
+=======
+<%- include ("../partials/nav.ejs") %>
+>>>>>>> b10a4d7 (Upgrade ejs modules (#227))
+
+<div class="container">
+<h2>Database Results</h2>
+
+<ul>
+    <% results.forEach(function(r) { %>
+        <li><%= r.id %> - <%= r.name %></li>
+    <% }); %>
+</ul>
+
+</div>
+
+</body>
+</html>
