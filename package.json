@@ -22,7 +22,7 @@
     "re2": "^1.21.4"
   },
   "devDependencies": {
-    "jest": "^29.7.0"
+    "jest": "^30.0.5"
   },
   "repository": {
     "type": "git",
