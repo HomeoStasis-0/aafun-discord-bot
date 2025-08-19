@@ -50,6 +50,18 @@ const commands = [
         required: false,
       },
     ],
+  },
+  {
+    name: 'summarize',
+    description: 'Summarize recent chat in this channel',
+    options: [
+      {
+        name: 'minutes',
+        type: 4, // INTEGER
+        description: 'Number of minutes to look back (default 60)',
+        required: false,
+      }
+    ]
   }
 ];
 

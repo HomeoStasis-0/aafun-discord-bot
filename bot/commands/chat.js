@@ -1,9 +1,7 @@
-const Groq = require('groq-sdk');
-const { GROQ_API_KEY } = require('../../config');
-const groq = new Groq({ apiKey: GROQ_API_KEY });
-
+const { createChatCompletion } = require('../utils/ai');
 const memory = {};
 const MAX_MEMORY = 10;
+const groq = require('../utils/groqClient');
 
 async function ensureDeferred(interaction) {
   if (!interaction.deferred && !interaction.replied) await interaction.deferReply();
@@ -41,9 +39,10 @@ module.exports = async function chat(interaction, client) {
   try {
     const resp = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      messages: memory[userId]
+      messages: memory[userId],
+      max_tokens: 800
     });
-    const reply = resp.choices[0]?.message?.content || 'Sorry, I could not process that.';
+    const reply = resp.choices?.[0]?.message?.content || 'Sorry, I could not process that.';
     await chunk(interaction, reply);
     memory[userId].push({ role: 'assistant', content: reply });
   } catch (err) {
