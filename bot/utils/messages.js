@@ -13,7 +13,6 @@ const MATCHERS = [
   [/\b15\b.*\bgirl\b|\bgirl\b.*\b15\b/, 'minecraft movie incident'],
   [/\bcommunism\b/, 'https://tenor.com/view/cat-asian-chinese-silly-ccp-gif-17771773925036748435'],
   [/\bkys\b|\bkms\b/, 'https://tenor.com/view/high-tier-human-low-tier-god-ltg-love-yourself-lowtiergod-gif-4914755758940822771'],
-  [/\bkhanh\b/, 'https://cdn.discordapp.com/attachments/1277012851352932516/1346031380013781043/khan.gif']
 ];
 
 // Per-message ID guard
