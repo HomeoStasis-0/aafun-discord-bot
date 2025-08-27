@@ -14,4 +14,4 @@ docker-compose.yml
 .env
 
 /birthdays.txt
-/secrets.txt
+/secrets.txt.env
