@@ -98,7 +98,7 @@ const commands = [
       {
         name: 'limit',
         type: 4, // INTEGER
-        description: 'Max number of recent messages to scan (default 1000, max 5000)',
+        description: 'Max number of recent messages to scan (default 1000, max 50000)',
         required: false,
       },
     ],

@@ -70,7 +70,7 @@ module.exports = async function purge(interaction, client) {
 
   const word = interaction.options.getString('word', true).trim();
   const picked = interaction.options.getChannel('channel');
-  const limit = Math.max(10, Math.min(5000, interaction.options.getInteger('limit') || 1000));
+  const limit = Math.max(10, Math.min(50000, interaction.options.getInteger('limit') || 1000));
 
   // Resolve channel (try fetch for better object if possible)
   let channel = picked || interaction.channel;
