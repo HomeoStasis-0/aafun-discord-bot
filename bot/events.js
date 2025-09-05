@@ -4,6 +4,7 @@ const gifsCommand = require('./commands/gifs');
 const restartCommand = require('./commands/restart');
 const clearCommand = require('./commands/clear');
 const summarizeCommand = require('./commands/summarize'); // new
+const purgeCommand = require('./commands/purge'); // new
 const handleMessages = require('./utils/messages');
 const { scheduleBirthdayChecks } = require('./utils/birthdays');
 
@@ -31,7 +32,8 @@ function registerEvents(client) {
       randomgif: gifsCommand,
       restart: restartCommand,
       clear: clearCommand,
-      summarize: summarizeCommand // new
+      summarize: summarizeCommand, // new
+      purge: purgeCommand // new
     };
     const fn = map[interaction.commandName];
     if (!fn) return;
