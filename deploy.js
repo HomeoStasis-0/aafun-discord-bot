@@ -77,31 +77,6 @@ const commands = [
         */
       }
     ]
-  },
-  {
-    name: 'purge',
-    description: 'Delete messages containing a given word from a channel',
-    options: [
-      {
-        name: 'word',
-        type: 3, // STRING
-        description: 'Word to match (whole-word, case-insensitive)',
-        required: true,
-      },
-      {
-        name: 'channel',
-        type: 7, // CHANNEL
-        description: 'Channel to purge (optional - defaults to the current channel)',
-        required: false,
-        channel_types: [0, 5, 10, 11, 12],
-      },
-      {
-        name: 'limit',
-        type: 4, // INTEGER
-        description: 'Max number of recent messages to scan (default 1000, max 50000)',
-        required: false,
-      },
-    ],
   }
 ];
 
