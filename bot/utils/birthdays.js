@@ -1,7 +1,9 @@
 const fs = require('fs');
+const path = require('path');
 const { BIRTHDAY_CHANNEL_ID } = require('../../config'); // fixed path
 
-const FILE = './birthdays.txt';
+// Use absolute path for birthdays.txt
+const FILE = path.resolve(__dirname, '../../birthdays.txt');
 
 function todayMMDD() {
   const d = new Date();
