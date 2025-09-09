@@ -55,6 +55,15 @@ function registerEvents(client) {
         const today = new Date().toISOString();
 
         if (type === 'yes') {
+          // prevent duplicate same-day recording before showing confirmation
+          try {
+            const d = new Date().toISOString().slice(0,10);
+            const u = await gymUtil.getUser(userId);
+            if (u && u.checks && u.checks[d] !== undefined) {
+              try { if (!interaction.replied) await interaction.reply({ content: 'You have already recorded a response for today.', ephemeral: true }); } catch (_) {}
+              return;
+            }
+          } catch (_) {}
           // ask for confirmation before recording a positive check-in
           const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
           const row = new ActionRowBuilder().addComponents(
@@ -66,6 +75,15 @@ function registerEvents(client) {
         }
 
         if (type === 'no') {
+          // prevent duplicate same-day recording before showing confirmation
+          try {
+            const d = new Date().toISOString().slice(0,10);
+            const u = await gymUtil.getUser(userId);
+            if (u && u.checks && u.checks[d] !== undefined) {
+              try { if (!interaction.replied) await interaction.reply({ content: 'You have already recorded a response for today.', ephemeral: true }); } catch (_) {}
+              return;
+            }
+          } catch (_) {}
           // show confirmation buttons
           const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
           const row = new ActionRowBuilder().addComponents(
@@ -81,20 +99,24 @@ function registerEvents(client) {
           const u = await gymUtil.getUser(userId);
           const d = new Date().toISOString().slice(0,10);
           if (!u) {
-            await interaction.reply({ content: 'No schedule found for you — register first.', ephemeral: true });
+            try { if (!interaction.replied) await interaction.reply({ content: 'No schedule found for you — register first.', ephemeral: true }); } catch (_) {}
             return;
           }
           if (u.checks && u.checks[d] !== undefined) {
-            await interaction.reply({ content: 'You have already recorded a response for today.', ephemeral: true });
+            try { if (!interaction.replied) await interaction.reply({ content: 'You have already recorded a response for today.', ephemeral: true }); } catch (_) {}
             return;
           }
-          // Remove components on the ephemeral confirmation to prevent re-clicks
-          try {
-            await interaction.update({ content: 'Marked as missed.', components: [] }).catch(() => {});
-          } catch (e) { }
+          // record first
           const streak = await gymUtil.recordCheck(userId, today, false);
-          await interaction.followUp({ content: `Marked as missed. Streak reset to ${streak}`, ephemeral: true });
-          return;
+          const finalMsg = `Marked as missed. Streak reset to ${streak}`;
+          // try update -> reply
+          try {
+            await interaction.update({ content: finalMsg, components: [] });
+            return;
+          } catch (e) {
+            try { if (!interaction.replied) await interaction.reply({ content: finalMsg, ephemeral: true }); } catch (_) {}
+            return;
+          }
         }
 
         if (type === 'confirmyes') {
@@ -102,20 +124,23 @@ function registerEvents(client) {
           const u = await gymUtil.getUser(userId);
           const d = new Date().toISOString().slice(0,10);
           if (!u) {
-            await interaction.reply({ content: 'No schedule found for you — register first.', ephemeral: true });
+            try { if (!interaction.replied) await interaction.reply({ content: 'No schedule found for you — register first.', ephemeral: true }); } catch (_) {}
             return;
           }
           if (u.checks && u.checks[d] !== undefined) {
-            await interaction.reply({ content: 'You have already recorded a response for today.', ephemeral: true });
+            try { if (!interaction.replied) await interaction.reply({ content: 'You have already recorded a response for today.', ephemeral: true }); } catch (_) {}
             return;
           }
-          // Remove confirmation components to prevent re-clicks
-          try {
-            await interaction.update({ content: 'Checked in.', components: [] }).catch(() => {});
-          } catch (e) { }
+          // record first
           const streak = await gymUtil.recordCheck(userId, today, true);
-          await interaction.followUp({ content: `Checked in. Streak is now ${streak}`, ephemeral: true });
-          return;
+          const finalMsg = `Checked in. Streak is now ${streak}`;
+          try {
+            await interaction.update({ content: finalMsg, components: [] });
+            return;
+          } catch (e) {
+            try { if (!interaction.replied) await interaction.reply({ content: finalMsg, ephemeral: true }); } catch (_) {}
+            return;
+          }
         }
 
         if (type === 'cancelyes') {
