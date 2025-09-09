@@ -88,47 +88,26 @@ async function fetchRecentMessages(channel, minutes, maxMessages = 1000) {
     const msgs = Array.from(batch.values());
     collected.push(...msgs);
     lastId = msgs[msgs.length - 1].id;
-<<<<<<< HEAD
-    // stop early if the oldest message in batch is older than cutoff
-    if (msgs[msgs.length - 1].createdTimestamp < cutoff) break;
-    // safety break if Discord returns less than requested
-    if (msgs.length < 100) break;
-  }
-  // Keep only messages newer than cutoff and not from bots, in chronological order
-=======
     if (msgs[msgs.length - 1].createdTimestamp < cutoff) break;
     if (msgs.length < 100) break;
   }
->>>>>>> 6af8b2c6555f0fadd7236312db8a22b09a781298
   return collected
     .filter(m => m.createdTimestamp >= cutoff && !m.author?.bot)
     .sort((a, b) => a.createdTimestamp - b.createdTimestamp);
 }
 
 function buildChatText(messages) {
-<<<<<<< HEAD
-  // Format into simple lines: "Author: content"
-  return messages.map(m => {
-    const name = m.member?.nickname || m.author.username || 'Unknown';
-    let content = (m.content || '').replace(/\n+/g, ' ');
-    if (!content && m.attachments?.size) content = `[attachment: ${m.attachments.map(a => a.name || a.url).join(', ')}]`;
-=======
   return messages.map(m => {
     const name = m.member?.nickname || m.author.username || 'Unknown';
     let content = (m.content || '').replace(/\n+/g, ' ');
     if (!content && m.attachments?.size) {
       content = `[attachment: ${m.attachments.map(a => a.name || a.url).join(', ')}]`;
     }
->>>>>>> 6af8b2c6555f0fadd7236312db8a22b09a781298
     return `${name}: ${content}`;
   }).join('\n');
 }
 
 async function summarizeText(text, minutes) {
-<<<<<<< HEAD
-  // system prompt instructs summarization
-=======
->>>>>>> 6af8b2c6555f0fadd7236312db8a22b09a781298
   const system = {
     role: 'system',
     content: 'You are a concise summarizer for Discord chat logs. Produce a short paragraph summary followed by 3-8 bullet points that capture key points, decisions, and action items. Keep it brief and readable.'
@@ -145,24 +124,6 @@ async function summarizeText(text, minutes) {
   return resp.choices?.[0]?.message?.content || 'No summary generated.';
 }
 
-<<<<<<< HEAD
-module.exports = async function summarize(interaction) {
-  await ensureDeferred(interaction);
-  try {
-    const minutes = Math.max(1, Math.min(60 * 24, interaction.options.getInteger('minutes') || 60)); // clamp 1..1440
-    const channel = interaction.channel;
-    if (!channel || !channel.messages) {
-      return interaction.editReply('Unable to access this channel\'s messages.');
-    }
-
-    await interaction.editReply(`Fetching messages from the last ${minutes} minute(s)...`);
-
-    const messages = await fetchRecentMessages(channel, minutes);
-    if (!messages.length) return interaction.editReply(`No messages found in the last ${minutes} minutes.`);
-
-    const chatText = buildChatText(messages);
-    // If the chatText is huge, you may want to truncate or chunk; try once and fallback on failure
-=======
 module.exports = async function summarize(interaction, client) {
   const ok = await ensureDeferred(interaction);
   if (!ok) {
@@ -239,29 +200,11 @@ module.exports = async function summarize(interaction, client) {
 
     const chatText = buildChatText(messages);
 
->>>>>>> 6af8b2c6555f0fadd7236312db8a22b09a781298
     let summary;
     try {
       summary = await summarizeText(chatText, minutes);
     } catch (err) {
       console.error('Summarize attempt failed, trying truncated input:', err.message);
-<<<<<<< HEAD
-      const truncated = chatText.slice(Math.max(0, chatText.length - 100_000)); // keep last ~100k chars
-      summary = await summarizeText(truncated, minutes);
-    }
-
-    // Send the summary (if long, send as follow-ups)
-    const MAX_CHARS = 1900;
-    if (summary.length <= MAX_CHARS) {
-      return interaction.editReply(summary);
-    } else {
-      // break into chunks
-      const chunks = [];
-      for (let i = 0; i < summary.length; i += MAX_CHARS) chunks.push(summary.slice(i, i + MAX_CHARS));
-      await interaction.editReply(chunks[0]);
-      for (let i = 1; i < chunks.length; i++) {
-        await interaction.followUp({ content: chunks[i] });
-=======
       const truncated = chatText.slice(Math.max(0, chatText.length - 100_000));
       summary = await summarizeText(truncated, minutes);
     }
@@ -300,17 +243,11 @@ module.exports = async function summarize(interaction, client) {
         await interaction.editReply('Error while posting the summary.');
       } catch (e) {
         console.error('Failed to send error message:', e);
->>>>>>> 6af8b2c6555f0fadd7236312db8a22b09a781298
       }
       return;
     }
   } catch (err) {
     console.error('Summarize error:', err);
-<<<<<<< HEAD
-    try { await interaction.editReply('Error while summarizing chat.'); } catch (e) {}
-  }
-};
-=======
     try {
       await interaction.editReply('Error while summarizing chat.');
     } catch (e) {
@@ -318,4 +255,3 @@ module.exports = async function summarize(interaction, client) {
     }
   }
 };
->>>>>>> 6af8b2c6555f0fadd7236312db8a22b09a781298

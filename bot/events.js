@@ -4,13 +4,9 @@ const gifsCommand = require('./commands/gifs');
 const restartCommand = require('./commands/restart');
 const clearCommand = require('./commands/clear');
 const summarizeCommand = require('./commands/summarize'); // new
-<<<<<<< HEAD
 const gymCommand = require('./commands/gym');
 const handleMessages = require('./utils/messages');
 const gymUtil = require('./utils/gym');
-=======
-const handleMessages = require('./utils/messages');
->>>>>>> 6af8b2c6555f0fadd7236312db8a22b09a781298
 const { scheduleBirthdayChecks } = require('./utils/birthdays');
 
 function registerEvents(client) {
@@ -26,7 +22,6 @@ function registerEvents(client) {
   client.on('ready', () => {
     console.log(`✅ Logged in as ${client.user.tag} (pid=${process.pid}, inst=${instanceId})`);
     console.log('[events] messageCreate listeners:', client.listenerCount('messageCreate'));
-<<<<<<< HEAD
   scheduleBirthdayChecks(client);
   // start gym daily posts
   gymUtil.scheduleDaily(client);
@@ -138,25 +133,6 @@ function registerEvents(client) {
           return;
         }
       }
-=======
-    scheduleBirthdayChecks(client);
-  });
-
-  client.on('interactionCreate', async interaction => {
-    if (!interaction.isChatInputCommand()) return;
-    const map = {
-      spotify: spotifyCommand,
-      chat: chatCommand,
-      randomgif: gifsCommand,
-      restart: restartCommand,
-      clear: clearCommand,
-      summarize: summarizeCommand // new
-    };
-    const fn = map[interaction.commandName];
-    if (!fn) return;
-    try {
-      await fn(interaction, client);
->>>>>>> 6af8b2c6555f0fadd7236312db8a22b09a781298
     } catch (err) {
       console.error('Interaction error:', err);
       if (!interaction.replied) {
