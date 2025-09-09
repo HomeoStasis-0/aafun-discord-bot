@@ -60,10 +60,15 @@ const commands = [
         type: 4, // INTEGER
         description: 'Number of minutes to look back (default 60)',
         required: false,
-      }
+      },
+      {
+        name: 'channel',
+        type: 7, // CHANNEL
+        description: 'The channel to summarize (default: current channel)',
+        required: false,
+      },
     ]
-  }
-  ,
+  },
   {
     name: 'gym',
     description: 'Gym streak commands',
