@@ -230,8 +230,10 @@ async function recordCheck(userId, dateStr, success) {
   };
   const isScheduled = Array.isArray(u.schedule) && u.schedule.includes(letter);
   if (u.checks[d] !== undefined) return u.streak;
-  u.checks[d] = !!success;
   if (success) {
+    // record positive check only for scheduled days
+    if (isScheduled) u.checks[d] = true;
+    
     const lastSuccess = u.lastCheck ? (new Date(u.lastCheck)).toISOString().slice(0,10) : null;
     if (lastSuccess) {
       const lastDate = new Date(lastSuccess);
