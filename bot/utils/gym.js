@@ -1,20 +1,30 @@
 const fs = require('fs');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
-const { open } = require('sqlite');
 const { GYM_CHANNEL_ID, GYM_ROLE_ID } = require('../../config');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 const JSON_FILE = path.resolve(__dirname, '../../gym_db.json');
-const DB_FILE = path.resolve(__dirname, '../../gym_db.sqlite');
 
-let dbPromise = null;
+// Prefer DATABASE_URL (Postgres) when present, otherwise fall back to sqlite
+const DATABASE_URL = process.env.DATABASE_URL || null;
 
-async function ensureDb() {
-  if (dbPromise) return dbPromise;
-  dbPromise = open({ filename: DB_FILE, driver: sqlite3.Database });
-  const db = await dbPromise;
-  await db.exec(`
+// Postgres client
+let pgClient = null;
+let sqlite3, open, sqliteDb;
+
+function weekDayLetter(n) {
+  const letters = ['SU','M','T','W','TH','F','SA'];
+  return letters[n];
+}
+
+async function ensurePostgres() {
+  if (pgClient) return pgClient;
+  const { Client } = require('pg');
+  const c = new Client({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  await c.connect();
+  pgClient = c;
+  // create tables if not exists
+  await pgClient.query(`
     CREATE TABLE IF NOT EXISTS users (
       userId TEXT PRIMARY KEY,
       schedule TEXT,
@@ -22,118 +32,197 @@ async function ensureDb() {
       lastCheck TEXT,
       checks TEXT
     );
+  `);
+  await pgClient.query(`
     CREATE TABLE IF NOT EXISTS pending (
       messageId TEXT PRIMARY KEY,
       userId TEXT,
       createdAt TEXT
     );
   `);
-  // migrate from JSON if present and DB empty
-  const row = await db.get("SELECT COUNT(1) as c FROM users");
-  if (row && row.c === 0 && fs.existsSync(JSON_FILE)) {
-    try {
-      const j = JSON.parse(fs.readFileSync(JSON_FILE, 'utf8') || '{}');
-      if (j.users) {
-        const insert = await db.prepare('INSERT OR REPLACE INTO users (userId, schedule, streak, lastCheck, checks) VALUES (?, ?, ?, ?, ?)');
-        for (const [uid, data] of Object.entries(j.users)) {
-          await insert.run(uid, JSON.stringify(data.schedule || []), data.streak || 0, data.lastCheck || null, JSON.stringify(data.checks || {}));
-        }
-        await insert.finalize();
-        console.log('[gym] migrated users from gym_db.json to sqlite');
-      }
-      if (j.pending) {
-        const pinsert = await db.prepare('INSERT OR REPLACE INTO pending (messageId, userId, createdAt) VALUES (?, ?, ?)');
-        for (const [mid, pending] of Object.entries(j.pending)) {
-          await pinsert.run(mid, pending.userId, pending.createdAt);
-        }
-        await pinsert.finalize();
-        console.log('[gym] migrated pending from gym_db.json to sqlite');
-      }
-    } catch (e) {
-      console.error('[gym] migration error', e.message);
-    }
-  }
-  return db;
+  return pgClient;
 }
 
-function weekDayLetter(n) {
-  const letters = ['SU','M','T','W','TH','F','SA'];
-  return letters[n];
+async function ensureSqlite() {
+  if (sqliteDb) return sqliteDb;
+  sqlite3 = require('sqlite3').verbose();
+  open = require('sqlite').open;
+  sqliteDb = await open({ filename: path.resolve(__dirname, '../../gym_db.sqlite'), driver: sqlite3.Database });
+  await sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      userId TEXT PRIMARY KEY,
+      schedule TEXT,
+      streak INTEGER DEFAULT 0,
+      lastCheck TEXT,
+      checks TEXT
+    );
+  `);
+  await sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS pending (
+      messageId TEXT PRIMARY KEY,
+      userId TEXT,
+      createdAt TEXT
+    );
+  `);
+  return sqliteDb;
+}
+
+async function ensureDb() {
+  if (DATABASE_URL) return ensurePostgres();
+  return ensureSqlite();
+}
+
+// Migration: read gym_db.json and insert into whichever DB is active
+async function migrateFromJsonIfNeeded() {
+  if (!fs.existsSync(JSON_FILE)) return;
+  const raw = fs.readFileSync(JSON_FILE, 'utf8') || '{}';
+  let j = {};
+  try { j = JSON.parse(raw); } catch (e) { console.error('[gym] invalid JSON file', e.message); return; }
+
+  if (DATABASE_URL) {
+    const db = await ensurePostgres();
+    const r = await db.query('SELECT COUNT(1) as c FROM users');
+    const c = (r && r.rows && r.rows[0]) ? parseInt(r.rows[0].c,10) : 0;
+    if (c === 0 && j.users) {
+      for (const [uid, data] of Object.entries(j.users)) {
+        await db.query('INSERT INTO users (userId, schedule, streak, lastCheck, checks) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (userId) DO UPDATE SET schedule=EXCLUDED.schedule, streak=EXCLUDED.streak, lastCheck=EXCLUDED.lastcheck, checks=EXCLUDED.checks', [uid, JSON.stringify(data.schedule||[]), data.streak||0, data.lastCheck||null, JSON.stringify(data.checks||{})]);
+      }
+      console.log('[gym] migrated users from gym_db.json to postgres');
+    }
+    if (j.pending) {
+      for (const [mid, pending] of Object.entries(j.pending)) {
+        await db.query('INSERT INTO pending (messageId, userId, createdAt) VALUES ($1,$2,$3) ON CONFLICT (messageId) DO NOTHING', [mid, pending.userId, pending.createdAt]);
+      }
+      console.log('[gym] migrated pending from gym_db.json to postgres');
+    }
+  } else {
+    const db = await ensureSqlite();
+    const row = await db.get('SELECT COUNT(1) as c FROM users');
+    const c = row ? row.c : 0;
+    if (c === 0 && j.users) {
+      const insert = await db.prepare('INSERT OR REPLACE INTO users (userId, schedule, streak, lastCheck, checks) VALUES (?, ?, ?, ?, ?)');
+      for (const [uid, data] of Object.entries(j.users)) {
+        await insert.run(uid, JSON.stringify(data.schedule || []), data.streak || 0, data.lastCheck || null, JSON.stringify(data.checks || {}));
+      }
+      await insert.finalize();
+      console.log('[gym] migrated users from gym_db.json to sqlite');
+    }
+    if (j.pending) {
+      const pinsert = await db.prepare('INSERT OR REPLACE INTO pending (messageId, userId, createdAt) VALUES (?, ?, ?)');
+      for (const [mid, pending] of Object.entries(j.pending)) {
+        await pinsert.run(mid, pending.userId, pending.createdAt);
+      }
+      await pinsert.finalize();
+      console.log('[gym] migrated pending from gym_db.json to sqlite');
+    }
+  }
+}
+
+// CRUD helpers abstracted for both DBs
+async function runQuery(sql, params=[]) {
+  if (DATABASE_URL) {
+    const db = await ensurePostgres();
+    return db.query(sql, params);
+  } else {
+    const db = await ensureSqlite();
+    return db.run(sql, params);
+  }
+}
+
+async function getQuery(sql, params=[]) {
+  if (DATABASE_URL) {
+    const db = await ensurePostgres();
+    const r = await db.query(sql, params);
+    return (r.rows && r.rows[0]) ? r.rows[0] : null;
+  } else {
+    const db = await ensureSqlite();
+    return db.get(sql, params);
+  }
+}
+
+async function allQuery(sql, params=[]) {
+  if (DATABASE_URL) {
+    const db = await ensurePostgres();
+    const r = await db.query(sql, params);
+    return r.rows || [];
+  } else {
+    const db = await ensureSqlite();
+    return db.all(sql, params);
+  }
 }
 
 async function registerUser(userId, days, messageId) {
-  const db = await ensureDb();
   if (Array.isArray(days) && days.length) {
-    await db.run('INSERT OR REPLACE INTO users (userId, schedule, streak, lastCheck, checks) VALUES (?, ?, COALESCE((SELECT streak FROM users WHERE userId = ?), 0), COALESCE((SELECT lastCheck FROM users WHERE userId = ?), NULL), COALESCE((SELECT checks FROM users WHERE userId = ?), ?))',
-      userId, JSON.stringify(days), userId, userId, userId, JSON.stringify({}));
+    const sched = JSON.stringify(days);
+    if (DATABASE_URL) {
+      await runQuery('INSERT INTO users (userId, schedule, streak, lastCheck, checks) VALUES ($1,$2,COALESCE((SELECT streak FROM users WHERE userId=$1),0),COALESCE((SELECT lastcheck FROM users WHERE userId=$1),NULL),COALESCE((SELECT checks FROM users WHERE userId=$1),$3)) ON CONFLICT (userId) DO UPDATE SET schedule=EXCLUDED.schedule', [userId, sched, JSON.stringify({})]);
+    } else {
+      await runQuery('INSERT OR REPLACE INTO users (userId, schedule, streak, lastCheck, checks) VALUES (?, ?, COALESCE((SELECT streak FROM users WHERE userId = ?), 0), COALESCE((SELECT lastCheck FROM users WHERE userId = ?), NULL), COALESCE((SELECT checks FROM users WHERE userId = ?), ?))', [userId, sched, userId, userId, userId, JSON.stringify({})]);
+    }
     return;
   }
   if (messageId) {
     // ensure only one pending per user
-    // remove any existing pending for this user
-    await db.run('DELETE FROM pending WHERE userId = ?', userId);
-    await db.run('INSERT OR REPLACE INTO pending (messageId, userId, createdAt) VALUES (?, ?, ?)', messageId, userId, new Date().toISOString());
+    await runQuery(DATABASE_URL ? 'DELETE FROM pending WHERE userId = $1' : 'DELETE FROM pending WHERE userId = ?', [userId]);
+    await runQuery(DATABASE_URL ? 'INSERT INTO pending (messageId, userId, createdAt) VALUES ($1,$2,$3) ON CONFLICT (messageId) DO NOTHING' : 'INSERT OR REPLACE INTO pending (messageId, userId, createdAt) VALUES (?,?,?)', [messageId, userId, new Date().toISOString()]);
   }
 }
 
 async function finalizeRegistrationFromMessage(messageId, userId, selectedLetters) {
-  const db = await ensureDb();
-  const pending = await db.get('SELECT * FROM pending WHERE messageId = ?', messageId);
+  const pending = await getPendingByMessage(messageId);
   if (!pending) return null;
   if (pending.userId !== userId) return null;
-  await db.run('INSERT OR REPLACE INTO users (userId, schedule, streak, lastCheck, checks) VALUES (?, ?, COALESCE((SELECT streak FROM users WHERE userId = ?), 0), COALESCE((SELECT lastCheck FROM users WHERE userId = ?), NULL), COALESCE((SELECT checks FROM users WHERE userId = ?), ?))',
-    userId, JSON.stringify(selectedLetters), userId, userId, userId, JSON.stringify({}));
-  await db.run('DELETE FROM pending WHERE messageId = ?', messageId);
-  const u = await getUser(userId);
-  return u;
+  const sched = JSON.stringify(selectedLetters);
+  if (DATABASE_URL) {
+    await runQuery('INSERT INTO users (userId, schedule, streak, lastCheck, checks) VALUES ($1,$2,COALESCE((SELECT streak FROM users WHERE userId=$1),0),COALESCE((SELECT lastcheck FROM users WHERE userId=$1),NULL),COALESCE((SELECT checks FROM users WHERE userId=$1),$3)) ON CONFLICT (userId) DO UPDATE SET schedule=EXCLUDED.schedule', [userId, sched, JSON.stringify({})]);
+    await runQuery('DELETE FROM pending WHERE messageId = $1', [messageId]);
+  } else {
+    await runQuery('INSERT OR REPLACE INTO users (userId, schedule, streak, lastCheck, checks) VALUES (?, ?, COALESCE((SELECT streak FROM users WHERE userId = ?), 0), COALESCE((SELECT lastCheck FROM users WHERE userId = ?), NULL), COALESCE((SELECT checks FROM users WHERE userId = ?), ?))', [userId, sched, userId, userId, userId, JSON.stringify({})]);
+    await runQuery('DELETE FROM pending WHERE messageId = ?', [messageId]);
+  }
+  return getUser(userId);
 }
 
 async function getPendingByMessage(messageId) {
-  const db = await ensureDb();
-  return db.get('SELECT * FROM pending WHERE messageId = ?', messageId);
+  const row = await getQuery(DATABASE_URL ? 'SELECT * FROM pending WHERE messageId = $1' : 'SELECT * FROM pending WHERE messageId = ?', [messageId]);
+  return row;
 }
 
 async function getUser(userId) {
-  const db = await ensureDb();
-  const row = await db.get('SELECT * FROM users WHERE userId = ?', userId);
+  const row = await getQuery(DATABASE_URL ? 'SELECT * FROM users WHERE userId = $1' : 'SELECT * FROM users WHERE userId = ?', [userId]);
   if (!row) return null;
   return {
     schedule: JSON.parse(row.schedule || '[]'),
     streak: row.streak || 0,
-    lastCheck: row.lastCheck || null,
+    lastCheck: row.lastcheck || row.lastCheck || null,
     checks: JSON.parse(row.checks || '{}')
   };
 }
 
 async function getAllUsers() {
-  const db = await ensureDb();
-  const rows = await db.all('SELECT userId, schedule, streak, lastCheck, checks FROM users');
+  const rows = await allQuery(DATABASE_URL ? 'SELECT userId, schedule, streak, lastcheck as lastCheck, checks FROM users' : 'SELECT userId, schedule, streak, lastCheck, checks FROM users');
   const out = {};
   for (const r of rows) {
-    out[r.userId] = { schedule: JSON.parse(r.schedule || '[]'), streak: r.streak || 0, lastCheck: r.lastCheck, checks: JSON.parse(r.checks || '{}') };
+    out[r.userid || r.userId] = { schedule: JSON.parse(r.schedule || '[]'), streak: r.streak || 0, lastCheck: r.lastcheck || r.lastCheck, checks: JSON.parse(r.checks || '{}') };
   }
   return out;
 }
 
 async function recordCheck(userId, dateStr, success) {
-  const db = await ensureDb();
   const d = (new Date(dateStr)).toISOString().slice(0,10);
   const day = new Date(dateStr).getDay();
   const letter = weekDayLetter(day);
-  const userRow = await db.get('SELECT * FROM users WHERE userId = ?', userId);
+  const userRow = await getQuery(DATABASE_URL ? 'SELECT * FROM users WHERE userId = $1' : 'SELECT * FROM users WHERE userId = ?', [userId]);
   if (!userRow) return null;
   const u = {
     schedule: JSON.parse(userRow.schedule || '[]'),
     checks: JSON.parse(userRow.checks || '{}'),
     streak: userRow.streak || 0,
-    lastCheck: userRow.lastCheck || null
+    lastCheck: userRow.lastcheck || userRow.lastCheck || null
   };
   const isScheduled = Array.isArray(u.schedule) && u.schedule.includes(letter);
-  // if already recorded today, do nothing
   if (u.checks[d] !== undefined) return u.streak;
-  // mark the day's check
   u.checks[d] = !!success;
-
   if (success) {
     const lastSuccess = u.lastCheck ? (new Date(u.lastCheck)).toISOString().slice(0,10) : null;
     if (lastSuccess) {
@@ -141,45 +230,45 @@ async function recordCheck(userId, dateStr, success) {
       const curDate = new Date(d);
       const diff = Math.round((curDate - lastDate) / (1000 * 60 * 60 * 24));
       if (diff === 1) u.streak = (u.streak || 0) + 1;
-      else if (diff === 0) { /* same day nothing */ }
+      else if (diff === 0) { }
       else u.streak = 1;
     } else {
       u.streak = 1;
     }
-    // no extra scheduled-day bonus — only one increment per success
     u.lastCheck = d;
   } else {
     if (isScheduled) {
       u.streak = 0;
       u.lastCheck = d;
     } else {
-      // record a missed non-scheduled day — do not change streak except to update lastCheck
       u.lastCheck = d;
     }
   }
-
-  await db.run('UPDATE users SET checks = ?, streak = ?, lastCheck = ? WHERE userId = ?', JSON.stringify(u.checks), u.streak, u.lastCheck, userId);
+  if (DATABASE_URL) {
+    await runQuery('UPDATE users SET checks = $1, streak = $2, lastcheck = $3 WHERE userId = $4', [JSON.stringify(u.checks), u.streak, u.lastCheck, userId]);
+  } else {
+    await runQuery('UPDATE users SET checks = ?, streak = ?, lastCheck = ? WHERE userId = ?', [JSON.stringify(u.checks), u.streak, u.lastCheck, userId]);
+  }
   return u.streak;
 }
 
 async function resetWeekly() {
-  const db = await ensureDb();
-  await db.run('UPDATE users SET checks = ? ', JSON.stringify({}));
+  if (DATABASE_URL) await runQuery('UPDATE users SET checks = $1', [JSON.stringify({})]);
+  else await runQuery('UPDATE users SET checks = ?', [JSON.stringify({})]);
 }
 
 async function checkMissedForDate(date) {
-  const db = await ensureDb();
   const d = (date instanceof Date) ? date.toISOString().slice(0,10) : (new Date(date)).toISOString().slice(0,10);
   const day = (new Date(d)).getDay();
   const letter = weekDayLetter(day);
-  const rows = await db.all('SELECT userId, schedule, checks FROM users');
+  const rows = await allQuery(DATABASE_URL ? 'SELECT userId, schedule, checks FROM users' : 'SELECT userId, schedule, checks FROM users');
   for (const r of rows) {
     const sched = JSON.parse(r.schedule || '[]');
     if (!sched.includes(letter)) continue;
     const checks = JSON.parse(r.checks || '{}');
     if (checks[d]) continue;
-    // missed scheduled day -> reset streak and set lastCheck
-    await db.run('UPDATE users SET streak = 0, lastCheck = ? WHERE userId = ?', d, r.userId);
+    if (DATABASE_URL) await runQuery('UPDATE users SET streak = 0, lastcheck = $1 WHERE userId = $2', [d, r.userid || r.userId]);
+    else await runQuery('UPDATE users SET streak = 0, lastCheck = ? WHERE userId = ?', [d, r.userId]);
   }
 }
 
@@ -250,9 +339,17 @@ async function sendCheckinNow(client) {
 
 // Admin helper: set a user's streak manually (useful for fixing mistakes)
 async function setStreak(userId, streak) {
-  const db = await ensureDb();
-  await db.run('INSERT OR IGNORE INTO users (userId, schedule, streak, lastCheck, checks) VALUES (?, ?, ?, ?, ?) ', userId, JSON.stringify([]), 0, null, JSON.stringify({}));
-  await db.run('UPDATE users SET streak = ? WHERE userId = ?', streak, userId);
+  if (DATABASE_URL) {
+    await runQuery('INSERT INTO users (userId, schedule, streak, lastcheck, checks) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (userId) DO NOTHING', [userId, JSON.stringify([]), 0, null, JSON.stringify({})]);
+    await runQuery('UPDATE users SET streak = $1 WHERE userId = $2', [streak, userId]);
+  } else {
+    const db = await ensureSqlite();
+    await db.run('INSERT OR IGNORE INTO users (userId, schedule, streak, lastCheck, checks) VALUES (?, ?, ?, ?, ?) ', userId, JSON.stringify([]), 0, null, JSON.stringify({}));
+    await db.run('UPDATE users SET streak = ? WHERE userId = ?', streak, userId);
+  }
 }
+
+// run migration at module load
+(async () => { try { await migrateFromJsonIfNeeded(); } catch (e) { console.error('[gym] migration startup error', e.message); } })();
 
 module.exports = { registerUser, getUser, recordCheck, scheduleDaily, finalizeRegistrationFromMessage, getPendingByMessage, sendCheckinNow, getAllUsers, setStreak };
