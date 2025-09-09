@@ -156,8 +156,8 @@ function registerEvents(client) {
       if (user.bot) return;
       // fetch partials
       if (reaction.partial) await reaction.fetch().catch(() => {});
-      const msg = reaction.message;
-      const pending = gymUtil.getPendingByMessage(msg.id);
+  const msg = reaction.message;
+  const pending = await gymUtil.getPendingByMessage(msg.id);
       if (!pending) return;
       // Only allow the original user to finalize
       if (pending.userId !== user.id) return;
@@ -192,8 +192,8 @@ function registerEvents(client) {
     try {
       if (user.bot) return;
       if (reaction.partial) await reaction.fetch().catch(() => {});
-      const msg = reaction.message;
-      const pending = gymUtil.getPendingByMessage(msg.id);
+  const msg = reaction.message;
+  const pending = await gymUtil.getPendingByMessage(msg.id);
       if (!pending) return;
       // allow user to update their selection; we'll not auto-finalize here — user can re-react when ready
     } catch (err) {
