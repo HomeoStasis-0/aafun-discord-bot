@@ -185,7 +185,13 @@ async function finalizeRegistrationFromMessage(messageId, userId, selectedLetter
 
 async function getPendingByMessage(messageId) {
   const row = await getQuery(DATABASE_URL ? 'SELECT * FROM pending WHERE messageId = $1' : 'SELECT * FROM pending WHERE messageId = ?', [messageId]);
-  return row;
+  if (!row) return null;
+  // normalize column names (Postgres returns lowercase column names)
+  return {
+    messageId: row.messageid || row.messageId,
+    userId: row.userid || row.userId,
+    createdAt: row.createdat || row.createdAt
+  };
 }
 
 async function getUser(userId) {
