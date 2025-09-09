@@ -350,6 +350,35 @@ async function setStreak(userId, streak) {
 }
 
 // run migration at module load
-(async () => { try { await migrateFromJsonIfNeeded(); } catch (e) { console.error('[gym] migration startup error', e.message); } })();
+async function promotePendingIfAny() {
+  try {
+    const rows = await allQuery(DATABASE_URL ? 'SELECT messageid as messageId, userid as userId, createdat as createdAt FROM pending' : 'SELECT messageId, userId, createdAt FROM pending');
+    if (!rows || !rows.length) return false;
+    for (const p of rows) {
+      const userId = p.userid || p.userId;
+      console.log('[gym] promoting pending for user', userId, 'message', p.messageid || p.messageId);
+      if (DATABASE_URL) {
+        await runQuery('INSERT INTO users (userId, schedule, streak, lastcheck, checks) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (userId) DO NOTHING', [userId, JSON.stringify([]), 0, null, JSON.stringify({})]);
+        await runQuery('DELETE FROM pending WHERE messageid = $1', [p.messageid || p.messageId]);
+      } else {
+        const db = await ensureSqlite();
+        await db.run('INSERT OR IGNORE INTO users (userId, schedule, streak, lastCheck, checks) VALUES (?, ?, ?, ?, ?)', userId, JSON.stringify([]), 0, null, JSON.stringify({}));
+        await db.run('DELETE FROM pending WHERE messageId = ?', p.messageId);
+      }
+    }
+    console.log('[gym] promoted pending rows');
+    return true;
+  } catch (e) {
+    console.error('[gym] promotePending error', e.message);
+    return false;
+  }
+}
+
+(async () => {
+  try {
+    await migrateFromJsonIfNeeded();
+    await promotePendingIfAny();
+  } catch (e) { console.error('[gym] migration startup error', e.message); }
+})();
 
 module.exports = { registerUser, getUser, recordCheck, scheduleDaily, finalizeRegistrationFromMessage, getPendingByMessage, sendCheckinNow, getAllUsers, setStreak };
