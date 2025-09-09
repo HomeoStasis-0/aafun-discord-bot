@@ -10,8 +10,11 @@ function createClient() {
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.GuildMessageReactions,
       GatewayIntentBits.MessageContent
     ]
+    ,
+    partials: ['MESSAGE','CHANNEL','REACTION']
   });
   // Added instance metadata
   client.__instanceInfo = {

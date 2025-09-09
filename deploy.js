@@ -60,6 +60,73 @@ const commands = [
         type: 4, // INTEGER
         description: 'Number of minutes to look back (default 60)',
         required: false,
+      },
+      {
+        name: 'channel',
+        type: 7, // CHANNEL
+        description: 'The channel to summarize (default: current channel)',
+        required: false,
+      },
+    ]
+  },
+  {
+    name: 'gym',
+    description: 'Gym streak commands',
+    options: [
+      {
+        type: 1, // SUB_COMMAND
+        name: 'register',
+        description: 'Register your gym schedule (comma-separated days: Mon,Tue,Wed...)',
+        options: [
+          {
+            name: 'days',
+            type: 3, // STRING
+            description: 'Comma separated weekdays (e.g. Mon,Wed,Fri)',
+            required: true
+          }
+        ]
+      },
+      {
+        type: 1,
+        name: 'status',
+        description: 'Show your gym schedule and streak'
+      },
+      {
+        type: 1,
+        name: 'dump',
+        description: 'Dump stored gym data (your own or a user if permitted)',
+        options: [
+          {
+            name: 'user',
+            type: 6, // USER
+            description: 'User to dump (requires Manage Guild permission)',
+            required: false
+          }
+        ]
+      },
+      {
+        type: 1,
+        name: 'send_streak',
+        description: 'Send current streaks for all registered users (requires Manage Guild)'
+      },
+      {
+        type: 1,
+        name: 'set_streak',
+        description: 'Set a user\'s streak (admin only)',
+        options: [
+          { name: 'user', type: 6, description: 'User to modify', required: true },
+          { name: 'streak', type: 4, description: 'Streak value (integer)', required: true }
+        ]
+      },
+      {
+        type: 1,
+        name: 'send',
+        description: 'Manually send today\'s gym check-in message to the gym channel (requires Manage Guild)'
+      },
+      {
+        type: 1,
+        name: 'schedule',
+        description: 'Show the gym schedule and who registered for each day'
       }
     ]
   }
