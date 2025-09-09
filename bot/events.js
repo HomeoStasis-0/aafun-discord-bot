@@ -88,8 +88,20 @@ function registerEvents(client) {
             await interaction.reply({ content: 'You have already recorded a response for today.', ephemeral: true });
             return;
           }
+          // Edit the original ephemeral confirmation to disable buttons and show final state
+          try {
+            if (interaction.message) {
+              const msg = interaction.message;
+              // disable components so the confirmation cannot be clicked again
+              const comps = msg.components || [];
+              for (const row of comps) {
+                for (const comp of row.components) comp.setDisabled(true);
+              }
+              await interaction.update({ content: 'Marked as missed.', components: comps }).catch(() => {});
+            }
+          } catch (e) { }
           const streak = await gymUtil.recordCheck(userId, today, false);
-          await interaction.reply({ content: `Marked as missed. Streak reset to ${streak}`, ephemeral: true });
+          await interaction.followUp({ content: `Marked as missed. Streak reset to ${streak}`, ephemeral: true });
           return;
         }
 
@@ -105,8 +117,19 @@ function registerEvents(client) {
             await interaction.reply({ content: 'You have already recorded a response for today.', ephemeral: true });
             return;
           }
+          // disable the confirmation buttons
+          try {
+            if (interaction.message) {
+              const msg = interaction.message;
+              const comps = msg.components || [];
+              for (const row of comps) {
+                for (const comp of row.components) comp.setDisabled(true);
+              }
+              await interaction.update({ content: 'Checked in.', components: comps }).catch(() => {});
+            }
+          } catch (e) { }
           const streak = await gymUtil.recordCheck(userId, today, true);
-          await interaction.reply({ content: `Checked in. Streak is now ${streak}`, ephemeral: true });
+          await interaction.followUp({ content: `Checked in. Streak is now ${streak}`, ephemeral: true });
           return;
         }
 

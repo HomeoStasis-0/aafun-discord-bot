@@ -229,29 +229,27 @@ async function recordCheck(userId, dateStr, success) {
     lastCheck: userRow.lastcheck || userRow.lastCheck || null
   };
   const isScheduled = Array.isArray(u.schedule) && u.schedule.includes(letter);
+  // prevent duplicate same-day responses
   if (u.checks[d] !== undefined) return u.streak;
+
+  // record that the user responded for this date (true for yes, false for no)
+  u.checks[d] = !!success;
+
   if (success) {
-    // record positive check only for scheduled days
-    if (isScheduled) u.checks[d] = true;
-    
-    const lastSuccess = u.lastCheck ? (new Date(u.lastCheck)).toISOString().slice(0,10) : null;
-    if (lastSuccess) {
-      const lastDate = new Date(lastSuccess);
-      const curDate = new Date(d);
-      const diff = Math.round((curDate - lastDate) / (1000 * 60 * 60 * 24));
-      if (diff === 1) u.streak = (u.streak || 0) + 1;
-      else if (diff === 0) { }
-      else u.streak = 1;
+    // only update streak/lastCheck for scheduled days
+    if (isScheduled) {
+      u.streak = (u.streak || 0) + 1;
+      u.lastCheck = d;
     } else {
-      u.streak = 1;
+      // non-scheduled positive responses are recorded but do not affect streak
     }
-    u.lastCheck = d;
   } else {
+    // missed responses: reset streak for scheduled days and mark lastCheck
     if (isScheduled) {
       u.streak = 0;
       u.lastCheck = d;
     } else {
-      u.lastCheck = d;
+      // non-scheduled negative response: record it but don't alter streak
     }
   }
   if (DATABASE_URL) {
