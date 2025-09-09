@@ -215,8 +215,10 @@ async function getAllUsers() {
 }
 
 async function recordCheck(userId, dateStr, success) {
-  const d = (new Date(dateStr)).toISOString().slice(0,10);
-  const day = new Date(dateStr).getDay();
+  // compute date and weekday in America/Chicago to match scheduled posts
+  const ct = new Date((new Date(dateStr)).toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+  const d = ct.toISOString().slice(0,10);
+  const day = ct.getDay();
   const letter = weekDayLetter(day);
   const userRow = await getQuery(DATABASE_URL ? 'SELECT * FROM users WHERE userId = $1' : 'SELECT * FROM users WHERE userId = ?', [userId]);
   if (!userRow) return null;
@@ -264,8 +266,12 @@ async function resetWeekly() {
 }
 
 async function checkMissedForDate(date) {
-  const d = (date instanceof Date) ? date.toISOString().slice(0,10) : (new Date(date)).toISOString().slice(0,10);
-  const day = (new Date(d)).getDay();
+  // compute date/day in America/Chicago timezone to match scheduled posts
+  const ct = (date instanceof Date)
+    ? new Date(date.toLocaleString('en-US', { timeZone: 'America/Chicago' }))
+    : new Date((new Date(date)).toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+  const d = ct.toISOString().slice(0,10);
+  const day = ct.getDay();
   const letter = weekDayLetter(day);
   const rows = await allQuery(DATABASE_URL ? 'SELECT userId, schedule, checks FROM users' : 'SELECT userId, schedule, checks FROM users');
   for (const r of rows) {
