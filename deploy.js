@@ -90,8 +90,7 @@ const commands = [
         type: 1,
         name: 'status',
         description: 'Show your gym schedule and streak'
-      }
-      ,
+      },
       {
         type: 1,
         name: 'dump',
@@ -104,14 +103,26 @@ const commands = [
             required: false
           }
         ]
-      }
-      ,
+      },
+      {
+        type: 1,
+        name: 'send_streak',
+        description: 'Send current streaks for all registered users (requires Manage Guild)'
+      },
+      {
+        type: 1,
+        name: 'set_streak',
+        description: 'Set a user\'s streak (admin only)',
+        options: [
+          { name: 'user', type: 6, description: 'User to modify', required: true },
+          { name: 'streak', type: 4, description: 'Streak value (integer)', required: true }
+        ]
+      },
       {
         type: 1,
         name: 'send',
         description: 'Manually send today\'s gym check-in message to the gym channel (requires Manage Guild)'
-      }
-      ,
+      },
       {
         type: 1,
         name: 'schedule',

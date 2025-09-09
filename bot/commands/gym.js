@@ -103,6 +103,42 @@ module.exports = async function gymCommand(interaction, client) {
     }
   }
 
+  if (sub === 'send_streak') {
+    const caller = interaction.member;
+    if (!caller.permissions.has('ManageGuild')) return interaction.reply({ content: 'You do not have permission to send streaks.', ephemeral: true });
+    try {
+      const all = await gym.getAllUsers();
+      const entries = Object.entries(all || {});
+      if (!entries.length) return interaction.reply({ content: 'No registered users to report.', ephemeral: true });
+      // Build lines with mention and streak
+      const lines = entries.map(([uid, data]) => {
+        const s = data && data.streak ? data.streak : 0;
+        return `<@${uid}> — ${s}`;
+      });
+      const embed = new EmbedBuilder().setTitle('Gym Streaks').setDescription(lines.join('\n'));
+      await interaction.reply({ embeds: [embed], ephemeral: false });
+    } catch (err) {
+      console.error('send_streak error', err);
+      return interaction.reply({ content: 'Failed to send streaks.', ephemeral: true });
+    }
+  }
+
+  if (sub === 'set_streak') {
+    // Admin command to set a user's streak manually
+    const caller = interaction.member;
+    if (!caller.permissions.has('ManageGuild')) return interaction.reply({ content: 'You do not have permission to set streaks.', ephemeral: true });
+    const target = interaction.options.getUser('user');
+    const value = interaction.options.getInteger('streak');
+    if (!target || typeof value !== 'number') return interaction.reply({ content: 'Usage: /gym set_streak user:@User streak:<number>', ephemeral: true });
+    try {
+      await gym.setStreak(target.id, value);
+      return interaction.reply({ content: `Set streak for <@${target.id}> to ${value}`, ephemeral: true });
+    } catch (err) {
+      console.error('set_streak error', err);
+      return interaction.reply({ content: 'Failed to set streak.', ephemeral: true });
+    }
+  }
+
   if (sub === 'schedule') {
     // build map of letters to array of user mentions
     const all = await gym.getAllUsers();

@@ -1,147 +1,139 @@
 const fs = require('fs');
 const path = require('path');
+const sqlite3 = require('sqlite3').verbose();
+const { open } = require('sqlite');
 const { GYM_CHANNEL_ID, GYM_ROLE_ID } = require('../../config');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
-// file should live at the project root (two levels up from bot/utils)
-const FILE = path.resolve(__dirname, '../../gym_db.json');
-// older incorrect location (three levels up) may exist; migrate it if found
-const OLD_FILE = path.resolve(__dirname, '../../../gym_db.json');
+const JSON_FILE = path.resolve(__dirname, '../../gym_db.json');
+const DB_FILE = path.resolve(__dirname, '../../gym_db.sqlite');
 
-function load() {
-  // migrate old file if present
-  try {
-    if (fs.existsSync(OLD_FILE) && !fs.existsSync(FILE)) {
-      console.log('[gym] migrating old DB from', OLD_FILE, 'to', FILE);
-      fs.renameSync(OLD_FILE, FILE);
+let dbPromise = null;
+
+async function ensureDb() {
+  if (dbPromise) return dbPromise;
+  dbPromise = open({ filename: DB_FILE, driver: sqlite3.Database });
+  const db = await dbPromise;
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      userId TEXT PRIMARY KEY,
+      schedule TEXT,
+      streak INTEGER DEFAULT 0,
+      lastCheck TEXT,
+      checks TEXT
+    );
+    CREATE TABLE IF NOT EXISTS pending (
+      messageId TEXT PRIMARY KEY,
+      userId TEXT,
+      createdAt TEXT
+    );
+  `);
+  // migrate from JSON if present and DB empty
+  const row = await db.get("SELECT COUNT(1) as c FROM users");
+  if (row && row.c === 0 && fs.existsSync(JSON_FILE)) {
+    try {
+      const j = JSON.parse(fs.readFileSync(JSON_FILE, 'utf8') || '{}');
+      if (j.users) {
+        const insert = await db.prepare('INSERT OR REPLACE INTO users (userId, schedule, streak, lastCheck, checks) VALUES (?, ?, ?, ?, ?)');
+        for (const [uid, data] of Object.entries(j.users)) {
+          await insert.run(uid, JSON.stringify(data.schedule || []), data.streak || 0, data.lastCheck || null, JSON.stringify(data.checks || {}));
+        }
+        await insert.finalize();
+        console.log('[gym] migrated users from gym_db.json to sqlite');
+      }
+      if (j.pending) {
+        const pinsert = await db.prepare('INSERT OR REPLACE INTO pending (messageId, userId, createdAt) VALUES (?, ?, ?)');
+        for (const [mid, pending] of Object.entries(j.pending)) {
+          await pinsert.run(mid, pending.userId, pending.createdAt);
+        }
+        await pinsert.finalize();
+        console.log('[gym] migrated pending from gym_db.json to sqlite');
+      }
+    } catch (e) {
+      console.error('[gym] migration error', e.message);
     }
-  } catch (e) { console.error('[gym] migrate error', e.message); }
-
-  if (!fs.existsSync(FILE)) {
-    // create initial db
-    const init = { users: {}, pending: {} };
-    fs.writeFileSync(FILE, JSON.stringify(init, null, 2));
-    return init;
   }
-  try { return JSON.parse(fs.readFileSync(FILE, 'utf8') || '{}'); } catch (e) { return { users: {}, pending: {} }; }
-}
-
-function save(db) {
-  try {
-    fs.writeFileSync(FILE, JSON.stringify(db, null, 2));
-    console.log('[gym] saved DB to', FILE);
-  } catch (e) {
-    console.error('[gym] save error', e.message);
-  }
+  return db;
 }
 
 function weekDayLetter(n) {
-  // Sunday=0 -> SU, Monday=1 -> M, ...
   const letters = ['SU','M','T','W','TH','F','SA'];
   return letters[n];
 }
 
-// If days is provided (array), register immediately. If messageId provided, add to pending map.
 async function registerUser(userId, days, messageId) {
-  const db = load();
-  if (!db.users) db.users = {};
+  const db = await ensureDb();
   if (Array.isArray(days) && days.length) {
-    db.users[userId] = db.users[userId] || { schedule: [], streak: 0, lastCheck: null, checks: {} };
-    db.users[userId].schedule = days; // store letters like M,T,W
-    db.users[userId].checks = db.users[userId].checks || {};
-    db.users[userId].streak = db.users[userId].streak || 0;
-    save(db);
+    await db.run('INSERT OR REPLACE INTO users (userId, schedule, streak, lastCheck, checks) VALUES (?, ?, COALESCE((SELECT streak FROM users WHERE userId = ?), 0), COALESCE((SELECT lastCheck FROM users WHERE userId = ?), NULL), COALESCE((SELECT checks FROM users WHERE userId = ?), ?))',
+      userId, JSON.stringify(days), userId, userId, userId, JSON.stringify({}));
     return;
   }
-  // else create pending registration entry tied to messageId
-  if (!db.pending) db.pending = {};
   if (messageId) {
-    // ensure only one pending entry exists per user
-    let existingMid = null;
-    for (const [mid, pending] of Object.entries(db.pending || {})) {
-      if (pending && pending.userId === userId) {
-        existingMid = mid;
-        break;
-      }
-    }
-    if (existingMid) {
-      if (existingMid === messageId) {
-        // same pending already recorded; nothing to do
-      } else {
-        // replace old pending with the new message id
-        delete db.pending[existingMid];
-        db.pending[messageId] = { userId, createdAt: new Date().toISOString() };
-      }
-    } else {
-      db.pending[messageId] = { userId, createdAt: new Date().toISOString() };
-    }
+    // ensure only one pending per user
+    // remove any existing pending for this user
+    await db.run('DELETE FROM pending WHERE userId = ?', userId);
+    await db.run('INSERT OR REPLACE INTO pending (messageId, userId, createdAt) VALUES (?, ?, ?)', messageId, userId, new Date().toISOString());
   }
-  save(db);
 }
 
 async function finalizeRegistrationFromMessage(messageId, userId, selectedLetters) {
-  const db = load();
-  if (!db.pending || !db.pending[messageId]) return null;
-  const pending = db.pending[messageId];
-  // Only allow the user who initiated the pending to finalize
+  const db = await ensureDb();
+  const pending = await db.get('SELECT * FROM pending WHERE messageId = ?', messageId);
+  if (!pending) return null;
   if (pending.userId !== userId) return null;
-  // write schedule
-  db.users = db.users || {};
-  db.users[userId] = db.users[userId] || { schedule: [], streak: 0, lastCheck: null, checks: {} };
-  db.users[userId].schedule = selectedLetters;
-  db.users[userId].checks = db.users[userId].checks || {};
-  db.users[userId].streak = db.users[userId].streak || 0;
-  delete db.pending[messageId];
-  save(db);
-  return db.users[userId];
+  await db.run('INSERT OR REPLACE INTO users (userId, schedule, streak, lastCheck, checks) VALUES (?, ?, COALESCE((SELECT streak FROM users WHERE userId = ?), 0), COALESCE((SELECT lastCheck FROM users WHERE userId = ?), NULL), COALESCE((SELECT checks FROM users WHERE userId = ?), ?))',
+    userId, JSON.stringify(selectedLetters), userId, userId, userId, JSON.stringify({}));
+  await db.run('DELETE FROM pending WHERE messageId = ?', messageId);
+  const u = await getUser(userId);
+  return u;
 }
 
-function getPendingByMessage(messageId) {
-  const db = load();
-  if (!db.pending) return null;
-  return db.pending[messageId] || null;
+async function getPendingByMessage(messageId) {
+  const db = await ensureDb();
+  return db.get('SELECT * FROM pending WHERE messageId = ?', messageId);
 }
 
-async function getUser(userId) { const db = load(); return db.users && db.users[userId] ? db.users[userId] : null; }
+async function getUser(userId) {
+  const db = await ensureDb();
+  const row = await db.get('SELECT * FROM users WHERE userId = ?', userId);
+  if (!row) return null;
+  return {
+    schedule: JSON.parse(row.schedule || '[]'),
+    streak: row.streak || 0,
+    lastCheck: row.lastCheck || null,
+    checks: JSON.parse(row.checks || '{}')
+  };
+}
+
+async function getAllUsers() {
+  const db = await ensureDb();
+  const rows = await db.all('SELECT userId, schedule, streak, lastCheck, checks FROM users');
+  const out = {};
+  for (const r of rows) {
+    out[r.userId] = { schedule: JSON.parse(r.schedule || '[]'), streak: r.streak || 0, lastCheck: r.lastCheck, checks: JSON.parse(r.checks || '{}') };
+  }
+  return out;
+}
 
 async function recordCheck(userId, dateStr, success) {
-  const db = load();
-  if (!db.users || !db.users[userId]) return null;
-  const u = db.users[userId];
-  u.checks = u.checks || {};
-  const d = (new Date(dateStr)).toISOString().slice(0,10); // YYYY-MM-DD
-  // determine weekday letter
+  const db = await ensureDb();
+  const d = (new Date(dateStr)).toISOString().slice(0,10);
   const day = new Date(dateStr).getDay();
   const letter = weekDayLetter(day);
-  // count checks on scheduled days; if not scheduled, still record and
-  // increment streak for a 'yes' using the same consecutive-day logic
-  // as scheduled days (but without the scheduled-day bonus).
+  const userRow = await db.get('SELECT * FROM users WHERE userId = ?', userId);
+  if (!userRow) return null;
+  const u = {
+    schedule: JSON.parse(userRow.schedule || '[]'),
+    checks: JSON.parse(userRow.checks || '{}'),
+    streak: userRow.streak || 0,
+    lastCheck: userRow.lastCheck || null
+  };
   const isScheduled = Array.isArray(u.schedule) && u.schedule.includes(letter);
-  if (!isScheduled) {
-    u.checks[d] = !!success;
-    if (success) {
-      // determine if we should increment streak (consecutive days rules)
-      const lastSuccess = u.lastCheck ? (new Date(u.lastCheck)).toISOString().slice(0,10) : null;
-      if (lastSuccess) {
-        const lastDate = new Date(lastSuccess);
-        const curDate = new Date(d);
-        const diff = Math.round((curDate - lastDate) / (1000 * 60 * 60 * 24));
-        if (diff === 1) u.streak = (u.streak || 0) + 1;
-        else if (diff === 0) { /* same day nothing */ }
-        else u.streak = 1;
-      } else {
-        u.streak = 1;
-      }
-      u.lastCheck = d;
-    }
-    save(db);
-    return u.streak || 0;
-  }
-
+  // if already recorded today, do nothing
+  if (u.checks[d] !== undefined) return u.streak;
   // mark the day's check
   u.checks[d] = !!success;
 
-  // If success, determine if we should increment streak
   if (success) {
     const lastSuccess = u.lastCheck ? (new Date(u.lastCheck)).toISOString().slice(0,10) : null;
     if (lastSuccess) {
@@ -154,50 +146,45 @@ async function recordCheck(userId, dateStr, success) {
     } else {
       u.streak = 1;
     }
-    // scheduled-day bonus: add an extra point when they check in on a scheduled day
-    u.streak = (u.streak || 0) + 1;
+    // no extra scheduled-day bonus — only one increment per success
     u.lastCheck = d;
   } else {
-    // missed on a scheduled day -> reset streak
-    u.streak = 0;
-    u.lastCheck = d;
+    if (isScheduled) {
+      u.streak = 0;
+      u.lastCheck = d;
+    } else {
+      // record a missed non-scheduled day — do not change streak except to update lastCheck
+      u.lastCheck = d;
+    }
   }
-  save(db);
+
+  await db.run('UPDATE users SET checks = ?, streak = ?, lastCheck = ? WHERE userId = ?', JSON.stringify(u.checks), u.streak, u.lastCheck, userId);
   return u.streak;
 }
 
 async function resetWeekly() {
-  const db = load();
-  if (!db.users) return;
-  for (const userId of Object.keys(db.users)) {
-    db.users[userId].checks = {};
-  }
-  save(db);
+  const db = await ensureDb();
+  await db.run('UPDATE users SET checks = ? ', JSON.stringify({}));
 }
 
-// Called on each daily run to check for users who missed their scheduled day (date is Date object or ISO string)
 async function checkMissedForDate(date) {
-  const db = load();
-  if (!db.users) return;
+  const db = await ensureDb();
   const d = (date instanceof Date) ? date.toISOString().slice(0,10) : (new Date(date)).toISOString().slice(0,10);
   const day = (new Date(d)).getDay();
   const letter = weekDayLetter(day);
-  for (const userId of Object.keys(db.users)) {
-    const u = db.users[userId];
-    if (!u.schedule || !u.schedule.includes(letter)) continue;
-    u.checks = u.checks || {};
-    if (u.checks[d]) continue; // they recorded something
-    // missed scheduled day -> reset streak
-    u.streak = 0;
-    u.lastCheck = d;
+  const rows = await db.all('SELECT userId, schedule, checks FROM users');
+  for (const r of rows) {
+    const sched = JSON.parse(r.schedule || '[]');
+    if (!sched.includes(letter)) continue;
+    const checks = JSON.parse(r.checks || '{}');
+    if (checks[d]) continue;
+    // missed scheduled day -> reset streak and set lastCheck
+    await db.run('UPDATE users SET streak = 0, lastCheck = ? WHERE userId = ?', d, r.userId);
   }
-  save(db);
 }
 
 function scheduleDaily(client) {
-  // Schedule a daily post at 08:00 Central Time (America/Chicago).
   function ctNow() {
-    // convert current time to America/Chicago
     const s = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' });
     return new Date(s);
   }
@@ -206,75 +193,66 @@ function scheduleDaily(client) {
     try {
       const channel = await client.channels.fetch(GYM_CHANNEL_ID).catch(() => null);
       if (!channel) return;
-      // mark missed for yesterday (CT)
       const yesterday = new Date(dateCT);
       yesterday.setDate(yesterday.getDate() - 1);
       await checkMissedForDate(yesterday);
-      const day = dateCT.getDay(); // CT weekday
-      // if it's Monday (1) in CT, reset weekly visual checks
-      if (day === 1) {
-        await resetWeekly();
-      }
+      const day = dateCT.getDay();
+      if (day === 1) await resetWeekly();
       const letter = weekDayLetter(day);
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`gym_yes_${letter}_${Date.now()}`).setLabel('Yes').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`gym_no_${letter}_${Date.now()}`).setLabel('No').setStyle(ButtonStyle.Danger)
       );
-  await channel.send({ content: `<@&${GYM_ROLE_ID}> Did you hit the gym today? (${letter})`, components: [row], allowedMentions: { roles: [GYM_ROLE_ID] } });
+      await channel.send({ content: `<@&${GYM_ROLE_ID}> Did you hit the gym today? (${letter})`, components: [row], allowedMentions: { roles: [GYM_ROLE_ID] } });
     } catch (err) {
       console.error('Gym schedule error:', err.message);
     }
   }
 
   function scheduleNext() {
-    // compute next 08:00 CT occurrence
     const nowCT = ctNow();
     const next = new Date(nowCT);
-    next.setHours(8, 0, 0, 0); // 08:00:00
-    if (nowCT >= next) {
-      next.setDate(next.getDate() + 1);
-    }
+    next.setHours(8, 0, 0, 0);
+    if (nowCT >= next) next.setDate(next.getDate() + 1);
     const delay = next - nowCT;
     setTimeout(async () => {
       const dateCT = ctNow();
       await runForDate(dateCT);
-      // schedule subsequent runs every 24h using scheduleNext
       scheduleNext();
     }, delay);
   }
 
-  // start scheduler
   scheduleNext();
 }
 
-// send checkin now (manual trigger)
 async function sendCheckinNow(client) {
   const nowCTStr = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' });
   const dateCT = new Date(nowCTStr);
   try {
     const channel = await client.channels.fetch(GYM_CHANNEL_ID).catch(() => null);
     if (!channel) throw new Error('No channel');
-    // mark missed for yesterday (CT)
     const yesterday = new Date(dateCT);
     yesterday.setDate(yesterday.getDate() - 1);
     await checkMissedForDate(yesterday);
-    const day = dateCT.getDay(); // CT weekday
+    const day = dateCT.getDay();
     if (day === 1) await resetWeekly();
     const letter = weekDayLetter(day);
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`gym_yes_${letter}_${Date.now()}`).setLabel('Yes').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId(`gym_no_${letter}_${Date.now()}`).setLabel('No').setStyle(ButtonStyle.Danger)
     );
-  await channel.send({ content: `<@&${GYM_ROLE_ID}> Did you hit the gym today? (${letter})`, components: [row], allowedMentions: { roles: [GYM_ROLE_ID] } });
+    await channel.send({ content: `<@&${GYM_ROLE_ID}> Did you hit the gym today? (${letter})`, components: [row], allowedMentions: { roles: [GYM_ROLE_ID] } });
   } catch (err) {
     console.error('sendCheckinNow error', err.message);
     throw err;
   }
 }
 
-async function getAllUsers() {
-  const db = load();
-  return db.users || {};
+// Admin helper: set a user's streak manually (useful for fixing mistakes)
+async function setStreak(userId, streak) {
+  const db = await ensureDb();
+  await db.run('INSERT OR IGNORE INTO users (userId, schedule, streak, lastCheck, checks) VALUES (?, ?, ?, ?, ?) ', userId, JSON.stringify([]), 0, null, JSON.stringify({}));
+  await db.run('UPDATE users SET streak = ? WHERE userId = ?', streak, userId);
 }
 
-module.exports = { registerUser, getUser, recordCheck, scheduleDaily, finalizeRegistrationFromMessage, getPendingByMessage, sendCheckinNow, getAllUsers };
+module.exports = { registerUser, getUser, recordCheck, scheduleDaily, finalizeRegistrationFromMessage, getPendingByMessage, sendCheckinNow, getAllUsers, setStreak };
