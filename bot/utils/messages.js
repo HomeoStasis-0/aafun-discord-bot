@@ -1,11 +1,28 @@
+const meowLyxchee = [
+  'https://tenor.com/view/larry-larry-cat-chat-larry-meme-chat-meme-cat-gif-10061556685042597078',
+];
+const meowOther = [
+  'https://tenor.com/view/big-poo-big-poo-cat-big-poo-cat-gif-8095478642247689280',
+  'https://tenor.com/view/cat-cute-adorable-punch-gif-17822730',
+  'https://tenor.com/view/smiling-cat-happy-cat-smile-gif-3555983607747631247',
+  'https://tenor.com/view/cat-staring-at-wall-gif-5602116364087636455',
+  'https://tenor.com/view/catshakira-cat-dance-catdance-catdancing-gif-22503034',
+  'https://tenor.com/view/m%C3%A8o-troll-bu%E1%BB%93n-kh%C3%B3c-gif-15310748970221777264',
+  'https://tenor.com/view/funny-animal-dancing-cat-cat-kitty-cute-gif-1879301708244436198',
+  'https://tenor.com/view/silly-reaction-meme-stan-twitter-funny-stressed-gif-7713976294327515532',
+  'https://tenor.com/view/cat-cat-with-tongue-cat-smiling-gif-11949735780193730026',
+  'https://tenor.com/view/cat-orange-cat-laughing-aaaa-gif-4465510619613777157',
+];
+
 const MATCHERS = [
   [/\berm+\b/, 'https://tenor.com/view/omori-erm-uuuh-uhh-huh-gif-15238876008948972055'],
   [/\bguh+\b/, 'https://tenor.com/view/guh-gif-25116077'],
   [/\bglorpshit\b/, 'https://tenor.com/view/glorp-glorpshit-mad-gif-12826934952903770254'],
   [/\bmeow\b/, m =>
     m.author.username === 'lyxchee'
-      ? 'https://tenor.com/view/larry-larry-cat-chat-larry-meme-chat-meme-cat-gif-10061556685042597078'
-      : 'https://tenor.com/view/big-poo-big-poo-cat-big-poo-cat-gif-8095478642247689280'],
+      ? meowLyxchee[Math.floor(Math.random() * meowLyxchee.length)]
+      : meowOther[Math.floor(Math.random() * meowOther.length)]
+  ],
   [/\bfemboy\b/, m =>
     m.author.username === 'homeo_stasis'
       ? 'https://tenor.com/view/anime-gif-1742373052751281532'
