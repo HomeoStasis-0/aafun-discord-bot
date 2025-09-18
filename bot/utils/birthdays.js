@@ -6,8 +6,8 @@ const { EmbedBuilder } = require('discord.js');
 // Use absolute path for birthdays.txt
 const FILE = path.resolve(__dirname, '../../birthdays.txt');
 
-// Interval in ms: 6 hours
-const INTERVAL_MS = 6 * 60 * 60 * 1000;
+// Interval in ms: 1 minute (for testing)
+const INTERVAL_MS = 60 * 1000;
 
 // In-memory dedupe for this process so we don't spam the same user multiple times
 const sentToday = new Set();
