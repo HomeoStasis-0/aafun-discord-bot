@@ -13,5 +13,5 @@ Dockerfile
 docker-compose.yml
 .env
 
-/birthdays.txt
+# /birthdays.txt REMOVED so it can be deployed to Heroku
 /secret.txt
