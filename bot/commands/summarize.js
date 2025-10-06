@@ -117,7 +117,7 @@ async function summarizeText(text, minutes) {
     content: `Summarize the following chat history (last ${minutes} minutes). Provide a short summary paragraph and bullet points:\n\n${text}`
   };
   const resp = await groq.chat.completions.create({
-    model: 'ollama-3.3-70b-versatile',
+    model: 'llama-3.3-70b-versatile',
     messages: [system, userMsg],
     max_tokens: 800
   });
