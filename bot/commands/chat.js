@@ -38,7 +38,7 @@ module.exports = async function chat(interaction, client) {
 
   try {
     const resp = await groq.chat.completions.create({
-      model: 'openai/gpt-oss-20b',
+      model: 'llama-3.3-70b-versatile',
       messages: memory[userId],
       max_tokens: 800
     });
