@@ -1,3 +1,26 @@
+// Get pending registration by userId
+async function getPendingByUser(userId) {
+  const row = await getQuery(DATABASE_URL ? 'SELECT * FROM pending WHERE userId = $1' : 'SELECT * FROM pending WHERE userId = ?', [userId]);
+  if (!row) return null;
+  // Try to get selected days from a temp file or in-memory (for demo, attach to row)
+  // In production, store selected in DB or cache
+  if (!row.selected) row.selected = [];
+  // merge in-memory pending selections if present
+  if (pendingSelections[userId]) row.selected = pendingSelections[userId];
+  return {
+    messageId: row.messageid || row.messageId,
+    userId: row.userid || row.userId,
+    createdAt: row.createdat || row.createdAt,
+    selected: row.selected
+  };
+}
+
+// Update selected days for pending registration (in-memory for demo)
+const pendingSelections = {};
+async function updatePendingSelection(userId, selected) {
+  pendingSelections[userId] = selected;
+}
+
 const fs = require('fs');
 const path = require('path');
 const { GYM_CHANNEL_ID, GYM_ROLE_ID } = require('../../config');
@@ -393,4 +416,4 @@ async function promotePendingIfAny() {
   } catch (e) { console.error('[gym] migration startup error', e.message); }
 })();
 
-module.exports = { registerUser, getUser, recordCheck, scheduleDaily, finalizeRegistrationFromMessage, getPendingByMessage, sendCheckinNow, getAllUsers, setStreak };
+module.exports = { registerUser, getUser, recordCheck, scheduleDaily, finalizeRegistrationFromMessage, getPendingByMessage, sendCheckinNow, getAllUsers, setStreak, getPendingByUser, updatePendingSelection };

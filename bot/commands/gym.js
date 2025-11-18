@@ -23,7 +23,8 @@ module.exports = async function gymCommand(interaction, client) {
   const userId = interaction.user.id;
 
   if (sub === 'register') {
-    try { await interaction.deferReply({ ephemeral: true }); } catch (_) {}
+    let deferred = false;
+    try { await interaction.deferReply({ ephemeral: true }); deferred = true; } catch (_) { deferred = false; }
     const channel = interaction.channel;
     const mapping = [ ['SU','🟥'], ['M','🟩'], ['T','🟦'], ['W','🟨'], ['TH','🟪'], ['F','🟫'], ['SA','⬜'] ];
     const buttons = mapping.map(([day, emoji]) =>
@@ -42,9 +43,13 @@ module.exports = async function gymCommand(interaction, client) {
       .setTitle('Gym Registration')
       .setDescription('Click the buttons below to select the days you plan to go to the gym. When finished, click "Done".');
     const msg = await channel.send({ content: `<@${userId}>`, embeds: [embed], components: [row1, row2] }).catch(() => null);
-    if (!msg) return interaction.editReply({ content: 'Unable to create registration message.' });
+    if (!msg) {
+      try { if (deferred) return interaction.editReply({ content: 'Unable to create registration message.' }); } catch (_) {}
+      return interaction.reply({ content: 'Unable to create registration message.', ephemeral: true });
+    }
     await gym.registerUser(userId, null, msg.id);
-    return interaction.editReply({ content: `Registration message posted: ${msg.url}` });
+    try { if (deferred) return interaction.editReply({ content: `Registration message posted: ${msg.url}` }); } catch (_) {}
+    return interaction.reply({ content: `Registration message posted: ${msg.url}`, ephemeral: true });
   }
 
   if (sub === 'status') {

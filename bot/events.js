@@ -58,17 +58,43 @@ function registerEvents(client) {
           // Add/remove the selected day for the user in a pending registration
           const pending = await gymUtil.getPendingByUser(userId);
           if (!pending) {
-            await interaction.reply({ content: 'No pending registration found. Please use /gym register.', ephemeral: true });
+            try { if (!interaction.replied) await interaction.reply({ content: 'No pending registration found. Please use /gym register.', ephemeral: true }); } catch (_) {}
+            return;
+          }
+          // ensure only the original user may select
+          if (pending.userId !== userId) {
+            try { if (!interaction.replied) await interaction.reply({ content: 'Only the registering user can select days.', ephemeral: true }); } catch (_) {}
             return;
           }
           let selected = pending.selected || [];
-          if (selected.includes(value)) {
-            selected = selected.filter(d => d !== value);
-          } else {
-            selected.push(value);
-          }
+          if (selected.includes(value)) selected = selected.filter(d => d !== value);
+          else selected.push(value);
+          // persist selection in memory (or DB later)
           await gymUtil.updatePendingSelection(userId, selected);
-          await interaction.reply({ content: `Selected days: ${selected.join(' ')}`, ephemeral: true });
+
+          // reflect selection by editing the original message instead of sending a new reply
+          try {
+            await interaction.deferUpdate();
+          } catch (_) {}
+          // build updated components with selected styling
+          const mapping = [ ['SU','🟥'], ['M','🟩'], ['T','🟦'], ['W','🟨'], ['TH','🟪'], ['F','🟫'], ['SA','⬜'] ];
+          const dayButtons = mapping.map(([d, emoji]) => {
+            const isSel = selected.includes(d);
+            return new (require('discord.js').ButtonBuilder)()
+              .setCustomId(`gym_day_${d}`)
+              .setLabel(`${emoji} ${d}`)
+              .setStyle(isSel ? require('discord.js').ButtonStyle.Primary : require('discord.js').ButtonStyle.Secondary);
+          });
+          const doneBtn = new (require('discord.js').ButtonBuilder)().setCustomId('gym_done').setLabel('Done').setStyle(require('discord.js').ButtonStyle.Success);
+          const row1 = new (require('discord.js').ActionRowBuilder)().addComponents(dayButtons.slice(0,4));
+          const row2 = new (require('discord.js').ActionRowBuilder)().addComponents(dayButtons.slice(4).concat([doneBtn]));
+          const embed = interaction.message.embeds && interaction.message.embeds[0] ? interaction.message.embeds[0] : new (require('discord.js').EmbedBuilder)().setTitle('Gym Registration');
+          embed.setDescription(`Selected days: ${selected.join(' ') || '_None_'}`);
+          try {
+            await interaction.message.edit({ embeds: [embed], components: [row1, row2] });
+          } catch (err) {
+            console.error('Failed to update registration message:', err.message || err);
+          }
           return;
         }
 
@@ -76,20 +102,140 @@ function registerEvents(client) {
         if (type === 'done') {
           const pending = await gymUtil.getPendingByUser(userId);
           if (!pending || !pending.selected || !pending.selected.length) {
-            await interaction.reply({ content: 'Please select at least one day before finishing registration.', ephemeral: true });
+            try { if (!interaction.replied) await interaction.reply({ content: 'Please select at least one day before finishing registration.', ephemeral: true }); } catch (_) {}
+            return;
+          }
+          // ensure only owner can finalize
+          if (pending.userId !== userId) {
+            try { if (!interaction.replied) await interaction.reply({ content: 'Only the registering user can finalize.', ephemeral: true }); } catch (_) {}
             return;
           }
           const result = await gymUtil.finalizeRegistrationFromMessage(pending.messageId, userId, pending.selected);
           if (result) {
-            await interaction.reply({ content: `Registration saved: ${result.schedule.join(' ')}`, ephemeral: true });
+            // update the original message to show saved and remove buttons
+            try {
+              await interaction.update({ content: `<@${userId}> Registration saved: ${result.schedule.join(' ')}`, embeds: [], components: [] });
+            } catch (err) {
+              try { if (!interaction.replied) await interaction.reply({ content: `Registration saved: ${result.schedule.join(' ')}`, ephemeral: true }); } catch (_) {}
+            }
           } else {
-            await interaction.reply({ content: 'Failed to save registration.', ephemeral: true });
+            try { if (!interaction.replied) await interaction.reply({ content: 'Failed to save registration.', ephemeral: true }); } catch (_) {}
           }
           return;
         }
 
-        // ...existing check-in and streak logic...
-        // ...existing code...
+        // check-in and streak logic (yes/no flows and confirmations)
+        if (type === 'yes') {
+          // prevent duplicate same-day recording before showing confirmation
+          try {
+            const d = new Date().toISOString().slice(0,10);
+            const u = await gymUtil.getUser(userId);
+            if (u && u.checks && u.checks[d] !== undefined) {
+              try { if (!interaction.replied) await interaction.reply({ content: 'You have already recorded a response for today.', ephemeral: true }); } catch (_) {}
+              return;
+            }
+          } catch (_) {}
+          // ask for confirmation before recording a positive check-in
+          const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`gym_confirmyes_${value}_${Date.now()}`).setLabel('Yes, confirm').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`gym_cancelyes_${value}_${Date.now()}`).setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+          );
+          await interaction.reply({ content: 'Are you sure you want to mark this as done?', components: [row], ephemeral: true });
+          return;
+        }
+
+        if (type === 'no') {
+          // prevent duplicate same-day recording before showing confirmation
+          try {
+            const d = new Date().toISOString().slice(0,10);
+            const u = await gymUtil.getUser(userId);
+            if (u && u.checks && u.checks[d] !== undefined) {
+              try { if (!interaction.replied) await interaction.reply({ content: 'You have already recorded a response for today.', ephemeral: true }); } catch (_) {}
+              return;
+            }
+          } catch (_) {}
+          // show confirmation buttons
+          const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`gym_confirmno_${value}_${Date.now()}`).setLabel('Yes, confirm').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`gym_cancelno_${value}_${Date.now()}`).setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+          );
+          await interaction.reply({ content: 'Are you sure you want to mark this as missed?', components: [row], ephemeral: true });
+          return;
+        }
+
+        if (type === 'confirmno') {
+          // prevent duplicate same-day recording
+          const u = await gymUtil.getUser(userId);
+          const d = new Date().toISOString().slice(0,10);
+          if (!u) {
+            try { if (!interaction.replied) await interaction.reply({ content: 'No schedule found for you — register first.', ephemeral: true }); } catch (_) {}
+            return;
+          }
+          if (u.checks && u.checks[d] !== undefined) {
+            try { if (!interaction.replied) await interaction.reply({ content: 'You have already recorded a response for today.', ephemeral: true }); } catch (_) {}
+            return;
+          }
+          // record first
+          const streak = await gymUtil.recordCheck(userId, new Date().toISOString(), false);
+          const finalMsg = `Marked as missed. Streak reset to ${streak}`;
+          // try update -> reply
+          try {
+            await interaction.update({ content: finalMsg, components: [] });
+            return;
+          } catch (e) {
+            try { if (!interaction.replied) await interaction.reply({ content: finalMsg, ephemeral: true }); } catch (_) {}
+            return;
+          }
+        }
+
+        if (type === 'confirmyes') {
+          // prevent duplicate same-day recording for yes
+          const u = await gymUtil.getUser(userId);
+          const d = new Date().toISOString().slice(0,10);
+          if (!u) {
+            try { if (!interaction.replied) await interaction.reply({ content: 'No schedule found for you — register first.', ephemeral: true }); } catch (_) {}
+            return;
+          }
+          if (u.checks && u.checks[d] !== undefined) {
+            try { if (!interaction.replied) await interaction.reply({ content: 'You have already recorded a response for today.', ephemeral: true }); } catch (_) {}
+            return;
+          }
+          // record first
+          const streak = await gymUtil.recordCheck(userId, new Date().toISOString(), true);
+          const finalMsg = `Checked in. Streak is now ${streak}`;
+          try {
+            await interaction.update({ content: finalMsg, components: [] });
+            return;
+          } catch (e) {
+            try { if (!interaction.replied) await interaction.reply({ content: finalMsg, ephemeral: true }); } catch (_) {}
+            return;
+          }
+        }
+
+        if (type === 'cancelyes') {
+          // remove the ephemeral confirmation message from the user's screen
+          try {
+            // acknowledge the interaction then delete the previous reply
+            await interaction.deferUpdate();
+            await interaction.deleteReply();
+          } catch (err) {
+            // fallback: send a short ephemeral acknowledgement
+            try { await interaction.reply({ content: 'Cancel received — no change.', ephemeral: true }); } catch (_) {}
+          }
+          return;
+        }
+
+        if (type === 'cancelno') {
+          try {
+            await interaction.deferUpdate();
+            await interaction.deleteReply();
+          } catch (err) {
+            try { await interaction.reply({ content: 'Cancel received — no change.', ephemeral: true }); } catch (_) {}
+          }
+          return;
+        }
       }
     } catch (err) {
       console.error('Interaction error:', err);
