@@ -162,6 +162,31 @@ function registerEvents(client) {
           return;
         }
 
+        // Handle refresh of live facility data (button id: gym_refresh_<facilityId>)
+        if (type === 'refresh') {
+          const facilityId = parts.slice(2).join('_') || value;
+          try {
+            await interaction.deferUpdate();
+            const live = await gymUtil.getFacilityLive(facilityId).catch(() => null);
+            if (!live || (live.count === null && !live.raw)) {
+              try { await interaction.editReply({ content: 'Unable to fetch live data for that facility.', components: [] }); } catch (_) { }
+              return;
+            }
+            const title = facilityId;
+            const description = `Live count: **${live.count !== null ? live.count : 'N/A'}**\nUpdated: ${live.updated || 'unknown'}`;
+            const embed = new (require('discord.js').EmbedBuilder)().setTitle(`Live — ${title}`).setDescription(description);
+            const refreshBtn = new (require('discord.js').ButtonBuilder)().setCustomId(`gym_refresh_${facilityId}`).setLabel('Refresh').setStyle(require('discord.js').ButtonStyle.Secondary);
+            const row = new (require('discord.js').ActionRowBuilder)().addComponents(refreshBtn);
+            try { await interaction.editReply({ embeds: [embed], components: [row] }); } catch (e) {
+              try { await interaction.update({ embeds: [embed], components: [row] }); } catch (_) {}
+            }
+          } catch (err) {
+            console.error('gym refresh error', err);
+            try { if (!interaction.replied) await interaction.reply({ content: 'Failed to refresh live data.', ephemeral: true }); } catch (_) {}
+          }
+          return;
+        }
+
         if (type === 'no') {
           // prevent duplicate same-day recording before showing confirmation
           try {
