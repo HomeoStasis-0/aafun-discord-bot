@@ -128,6 +128,15 @@ const commands = [
         name: 'schedule',
         description: 'Show the gym schedule and who registered for each day'
       }
+      ,
+      {
+        type: 1,
+        name: 'live',
+        description: 'Show live counts for a facility',
+        options: [
+          { name: 'facility', type: 3, description: 'Facility id or name (optional)', required: false }
+        ]
+      }
     ]
   }
 ];
