@@ -165,6 +165,9 @@ module.exports = async function gymCommand(interaction, client) {
   }
   
   if (sub === 'live') {
+    // Avoid "Unknown interaction" by acknowledging quickly before network calls.
+    try { if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: false }); } catch (_) {}
+
     const facilityArg = interaction.options.getString('facility');
     // fetch facilities from API (fallback to static list if unavailable)
     let facilities = await gym.fetchFacilities().catch(() => []);
@@ -192,7 +195,7 @@ module.exports = async function gymCommand(interaction, client) {
         const title = match ? match.name : facilityIdToUse;
         const description = `Live count: **${live.count !== null ? live.count : 'N/A'}**\nUpdated: ${live.updated || 'unknown'}`;
         const embed = new EmbedBuilder().setTitle(`Live — ${title}`).setDescription(description);
-        const refreshBtn = new ButtonBuilder().setCustomId(`gym_refresh_${facilityIdToUse}`).setLabel('Refresh').setStyle(ButtonStyle.Secondary);
+        const refreshBtn = new ButtonBuilder().setCustomId(`gym_refresh__${encodeURIComponent(title)}`).setLabel('Refresh').setStyle(ButtonStyle.Secondary);
         const rowRefresh = new ActionRowBuilder().addComponents(refreshBtn);
         return interaction.editReply({ embeds: [embed], components: [rowRefresh] });
       } catch (err) {
@@ -226,7 +229,7 @@ module.exports = async function gymCommand(interaction, client) {
         return rows;
       };
 
-      await interaction.reply({ content: 'Select a facility to view live counts:', components: makeComponents(page), ephemeral: false });
+      await interaction.editReply({ content: 'Select a facility to view live counts:', components: makeComponents(page) });
       const replyMsg = await interaction.fetchReply();
 
       while (true) {
@@ -266,7 +269,7 @@ module.exports = async function gymCommand(interaction, client) {
           const title = found ? found.name : selected;
           const description = `Live count: **${live.count !== null ? live.count : 'N/A'}**\nUpdated: ${live.updated || 'unknown'}`;
           const embed = new EmbedBuilder().setTitle(`Live — ${title}`).setDescription(description);
-          const refreshBtn = new ButtonBuilder().setCustomId(`gym_refresh_${selected}`).setLabel('Refresh').setStyle(ButtonStyle.Secondary);
+          const refreshBtn = new ButtonBuilder().setCustomId(`gym_refresh__${encodeURIComponent(title)}`).setLabel('Refresh').setStyle(ButtonStyle.Secondary);
           const rowRefresh = new ActionRowBuilder().addComponents(refreshBtn);
           await interaction.editReply({ embeds: [embed], components: [rowRefresh] });
           break;
@@ -274,7 +277,12 @@ module.exports = async function gymCommand(interaction, client) {
       }
     } catch (err) {
       console.error('gym live select error', err);
-      return interaction.reply({ content: 'Failed to create facility selector.', ephemeral: false });
+      try {
+        if (interaction.deferred || interaction.replied) return interaction.editReply({ content: 'Failed to create facility selector.', components: [] });
+        return interaction.reply({ content: 'Failed to create facility selector.', ephemeral: false });
+      } catch (_) {
+        return;
+      }
     }
   }
 };

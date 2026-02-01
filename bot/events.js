@@ -162,23 +162,89 @@ function registerEvents(client) {
           return;
         }
 
-        // Handle refresh of live facility data (button id: gym_refresh_<facilityId>)
+        // Handle refresh of live facility data
         if (type === 'refresh') {
-          const facilityId = parts.slice(2).join('_') || value;
+          // Supported formats:
+          // - legacy: gym_refresh_<facilityId>
+          // - legacy+name: gym_refresh_<facilityId>__<encodedDisplayName>
+          // - current: gym_refresh__<encodedDisplayName>
+          let facilityId = null;
+          let providedDisplay = null;
+          if (id.startsWith('gym_refresh__')) {
+            const encoded = id.slice('gym_refresh__'.length);
+            providedDisplay = encoded ? decodeURIComponent(encoded) : null;
+          } else if (id.startsWith('gym_refresh_')) {
+            const raw = id.slice('gym_refresh_'.length);
+            const idx = raw.indexOf('__');
+            if (idx === -1) {
+              facilityId = raw || value;
+            } else {
+              facilityId = raw.slice(0, idx) || value;
+              const encoded = raw.slice(idx + 2);
+              providedDisplay = encoded ? decodeURIComponent(encoded) : null;
+            }
+          }
           try {
-            await interaction.deferUpdate();
-            const live = await gymUtil.getFacilityLive(facilityId).catch(() => null);
+            // debug: show parsed id/display before fetching
+            console.log(`[gym] refresh debug id=${id} facilityId=${facilityId} providedDisplay=${providedDisplay}`);
+            // read existing embed/title before attempting to defer the interaction
+            const existingEmbed = interaction.message && interaction.message.embeds && interaction.message.embeds[0];
+            const existingTitle = existingEmbed && existingEmbed.title ? existingEmbed.title.replace(/^Live\s*—\s*/i, '') : null;
+            console.log(`[gym] refresh debug existingTitle(before)=${existingTitle}`);
+            // defer update only if not already acknowledged
+            try { if (!interaction.deferred && !interaction.replied) await interaction.deferUpdate().catch(() => {}); } catch (_) {}
+
+            // Resolve a stable lookup key for the API call.
+            // Prefer numeric facilityId when present; otherwise use the display name.
+            const lookupKey = facilityId || providedDisplay || value;
+            const live = await gymUtil.getFacilityLive(lookupKey).catch(() => null);
+            console.log('[gym] refresh debug live.raw=', live && live.raw ? (typeof live.raw === 'string' ? live.raw : JSON.stringify(live.raw).slice(0,200)) : null);
             if (!live || (live.count === null && !live.raw)) {
               try { await interaction.editReply({ content: 'Unable to fetch live data for that facility.', components: [] }); } catch (_) { }
               return;
             }
-            const title = facilityId;
+            // existingTitle was captured before deferring; reuse it here
+            // (if it's null here, try to extract again)
+            let existingTitleNow = existingTitle;
+            if (!existingTitleNow) {
+              const ee = interaction.message && interaction.message.embeds && interaction.message.embeds[0];
+              existingTitleNow = ee && ee.title ? ee.title.replace(/^Live\s*—\s*/i, '') : null;
+            }
+            console.log(`[gym] refresh debug existingTitle=${existingTitleNow}`);
+            // Try to resolve the friendly name using the same facility list logic used on initial display
+            let facilities = [];
+            try { facilities = await gymUtil.fetchFacilities().catch(() => []); } catch (_) { facilities = []; }
+            const lowerId = String(facilityId || '').toLowerCase();
+            const foundFacility = (facilities || []).find(f => {
+              try {
+                const fid = String(f.id || '').toLowerCase();
+                const fname = String(f.name || '').toLowerCase();
+                return fid === lowerId || fname === lowerId || fname.includes(lowerId);
+              } catch (e) { return false; }
+            });
+            console.log('[gym] refresh debug facility match=', foundFacility && foundFacility.name);
+            // Prefer: encoded providedDisplay -> facility list match -> descriptive API name (non-numeric) -> existing title -> facilityId
+            let apiName = null;
+            if (live && live.raw) apiName = live.raw.facility || live.raw.facilityName || live.raw.name || null;
+            const hasNonNumeric = apiName && /\D/.test(String(apiName));
+            // Prefer existing embed title first so refreshing doesn't replace a human name with an id
+            const foundName = existingTitleNow || providedDisplay || (foundFacility ? foundFacility.name : (hasNonNumeric ? apiName : facilityId));
+            console.log('[gym] refresh debug providedDisplay=', providedDisplay, 'apiName=', apiName, 'hasNonNumeric=', !!hasNonNumeric, 'existingTitle=', existingTitleNow, 'chosen=', foundName);
             const description = `Live count: **${live.count !== null ? live.count : 'N/A'}**\nUpdated: ${live.updated || 'unknown'}`;
-            const embed = new (require('discord.js').EmbedBuilder)().setTitle(`Live — ${title}`).setDescription(description);
-            const refreshBtn = new (require('discord.js').ButtonBuilder)().setCustomId(`gym_refresh_${facilityId}`).setLabel('Refresh').setStyle(require('discord.js').ButtonStyle.Secondary);
+            const embed = new (require('discord.js').EmbedBuilder)().setTitle(`Live — ${foundName}`).setDescription(description);
+            const newEncoded = encodeURIComponent(foundName || '');
+            // use new format: gym_refresh__<encodedDisplay>
+            const refreshBtn = new (require('discord.js').ButtonBuilder)()
+              .setCustomId(`gym_refresh__${newEncoded}`)
+              .setLabel('Refresh')
+              .setStyle(require('discord.js').ButtonStyle.Secondary);
             const row = new (require('discord.js').ActionRowBuilder)().addComponents(refreshBtn);
-            try { await interaction.editReply({ embeds: [embed], components: [row] }); } catch (e) {
-              try { await interaction.update({ embeds: [embed], components: [row] }); } catch (_) {}
+
+            // Edit the original message directly; this avoids interaction ack edge cases
+            try {
+              await interaction.message.edit({ embeds: [embed], components: [row] });
+            } catch (e) {
+              console.error('[gym] refresh message.edit failed', e && (e.message || e));
             }
           } catch (err) {
             console.error('gym refresh error', err);
