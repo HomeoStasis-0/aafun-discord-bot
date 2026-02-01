@@ -1,4 +1,4 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder } = require('discord.js');
 const gym = require('../utils/gym');
 
 function parseDays(input) {
@@ -162,5 +162,119 @@ module.exports = async function gymCommand(interaction, client) {
     const lines = order.map(l => `${l}: ${days[l].length ? days[l].join(' ') : '_None_'} `);
     const embed = new EmbedBuilder().setTitle('Gym Schedule').setDescription(lines.join('\n'));
     return interaction.reply({ embeds: [embed], ephemeral: true });
+  }
+  
+  if (sub === 'live') {
+    const facilityArg = interaction.options.getString('facility');
+    // fetch facilities from API (fallback to static list if unavailable)
+    let facilities = await gym.fetchFacilities().catch(() => []);
+    if (!facilities || !facilities.length) {
+      facilities = [
+        { id: 'student-rec-center', name: 'Student Rec Center' },
+        { id: 'penberthy-rec-tennis', name: 'Penberthy Rec Sports Complex-Tennis' },
+        { id: 'peap', name: 'PEAP' },
+        { id: 'southside-rec-center', name: 'Southside Rec Center' },
+        { id: 'outdoor-adventures', name: 'Outdoor Adventures' },
+        { id: 'aquatics', name: 'Aquatics' },
+        { id: 'polo-road-rec-center', name: 'Polo Road Rec Center' }
+      ];
+    }
+
+    // If a facility argument was provided, try to match and show live immediately
+    if (facilityArg) {
+      const lower = facilityArg.toLowerCase();
+      const match = facilities.find(f => String(f.id).toLowerCase() === lower || String(f.name||'').toLowerCase() === lower || String(f.name||'').toLowerCase().includes(lower));
+      const facilityIdToUse = match ? match.id : facilityArg;
+      try {
+        await interaction.deferReply({ ephemeral: false }).catch(() => {});
+        const live = await gym.getFacilityLive(facilityIdToUse);
+        if (!live || (live.count === null && !live.raw)) return interaction.editReply({ content: 'Unable to fetch live data for that facility. Check `GYM_API_URL`/`GYM_API_KEY`.' });
+        const title = match ? match.name : facilityIdToUse;
+        const description = `Live count: **${live.count !== null ? live.count : 'N/A'}**\nUpdated: ${live.updated || 'unknown'}`;
+        const embed = new EmbedBuilder().setTitle(`Live — ${title}`).setDescription(description);
+        const refreshBtn = new ButtonBuilder().setCustomId(`gym_refresh_${facilityIdToUse}`).setLabel('Refresh').setStyle(ButtonStyle.Secondary);
+        const rowRefresh = new ActionRowBuilder().addComponents(refreshBtn);
+        return interaction.editReply({ embeds: [embed], components: [rowRefresh] });
+      } catch (err) {
+        console.error('gym live error', err);
+        try { return interaction.editReply({ content: 'Failed to fetch facility live data.' }); } catch (_) { return interaction.reply({ content: 'Failed to fetch facility live data.', ephemeral: false }); }
+      }
+    }
+
+    // No arg: present a paginated select menu (25 options/page)
+    try {
+      const pageSize = 25;
+      let page = 0;
+      const pages = Math.max(1, Math.ceil(facilities.length / pageSize));
+
+      const makeComponents = (p) => {
+        const start = p * pageSize;
+        const slice = facilities.slice(start, start + pageSize);
+        const options = slice.map(f => ({ label: f.name || f.id, value: f.id }));
+        const menu = new StringSelectMenuBuilder()
+          .setCustomId('gym_select_facility')
+          .setPlaceholder(`Page ${p+1}/${pages} — Select a facility`)
+          .addOptions(options)
+          .setMinValues(1)
+          .setMaxValues(1);
+        const rows = [new ActionRowBuilder().addComponents(menu)];
+        if (pages > 1) {
+          const prev = new ButtonBuilder().setCustomId('gym_page_prev').setLabel('Prev').setStyle(ButtonStyle.Primary).setDisabled(p === 0);
+          const next = new ButtonBuilder().setCustomId('gym_page_next').setLabel('Next').setStyle(ButtonStyle.Primary).setDisabled(p === pages - 1);
+          rows.push(new ActionRowBuilder().addComponents(prev, next));
+        }
+        return rows;
+      };
+
+      await interaction.reply({ content: 'Select a facility to view live counts:', components: makeComponents(page), ephemeral: false });
+      const replyMsg = await interaction.fetchReply();
+
+      while (true) {
+        let comp;
+        try {
+          comp = await replyMsg.awaitMessageComponent({ filter: i => i.user.id === interaction.user.id, time: 30000 });
+        } catch (e) {
+          // timeout
+          try { await interaction.editReply({ content: 'No selection received (timed out).', components: [] }); } catch (_) {}
+          break;
+        }
+
+        // handle page buttons
+        if (comp.customId === 'gym_page_prev') {
+          await comp.deferUpdate();
+          page = Math.max(0, page - 1);
+          await interaction.editReply({ components: makeComponents(page) });
+          continue;
+        }
+        if (comp.customId === 'gym_page_next') {
+          await comp.deferUpdate();
+          page = Math.min(pages - 1, page + 1);
+          await interaction.editReply({ components: makeComponents(page) });
+          continue;
+        }
+
+        // selection made
+        if (comp.customId === 'gym_select_facility') {
+          const selected = comp.values && comp.values[0];
+          await comp.deferUpdate();
+          const live = await gym.getFacilityLive(selected);
+          if (!live || (live.count === null && !live.raw)) {
+            await interaction.editReply({ content: 'Unable to fetch live data for that facility. Check `GYM_API_URL`/`GYM_API_KEY`.', components: [] });
+            break;
+          }
+          const found = facilities.find(f => f.id === selected);
+          const title = found ? found.name : selected;
+          const description = `Live count: **${live.count !== null ? live.count : 'N/A'}**\nUpdated: ${live.updated || 'unknown'}`;
+          const embed = new EmbedBuilder().setTitle(`Live — ${title}`).setDescription(description);
+          const refreshBtn = new ButtonBuilder().setCustomId(`gym_refresh_${selected}`).setLabel('Refresh').setStyle(ButtonStyle.Secondary);
+          const rowRefresh = new ActionRowBuilder().addComponents(refreshBtn);
+          await interaction.editReply({ embeds: [embed], components: [rowRefresh] });
+          break;
+        }
+      }
+    } catch (err) {
+      console.error('gym live select error', err);
+      return interaction.reply({ content: 'Failed to create facility selector.', ephemeral: false });
+    }
   }
 };

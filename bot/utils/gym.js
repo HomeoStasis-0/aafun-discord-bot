@@ -25,6 +25,84 @@ const fs = require('fs');
 const path = require('path');
 const { GYM_CHANNEL_ID, GYM_ROLE_ID } = require('../../config');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const axios = require('axios');
+
+// HTTP helpers for facility/live counters
+const GYM_API_KEY = process.env.GYM_API_KEY || '99563b55-ae4f-4001-b384-648e0ebeaeb5';
+const DEFAULT_COUNTS_URL = 'https://goboardapi.azurewebsites.net/api/FacilityCount/GetCountsByAccount';
+const GYM_API_URL = process.env.GYM_API_URL || DEFAULT_COUNTS_URL;
+
+async function fetchFacilities() {
+  try {
+    const res = await axios.get(GYM_API_URL, { params: { AccountAPIKey: GYM_API_KEY }, timeout: 8000 });
+    let raw = res.data;
+    if (!raw) {
+      try {
+        const r2 = await axios.get(GYM_API_URL, { params: { AccountAPIKey: GYM_API_KEY }, timeout: 8000, responseType: 'text' });
+        const txt = r2.data;
+        if (txt) {
+          try { raw = JSON.parse(txt); } catch (e) { raw = txt; }
+        }
+      } catch (e) {
+        console.error('[gym] fetchFacilities fallback text error', e && e.message ? e.message : e);
+      }
+    }
+    const arr = Array.isArray(raw) ? raw : (raw && (raw.Data || raw.value || raw.facilities)) || [];
+    // dedupe by FacilityId and return unique facilities
+    const map = new Map();
+    for (const item of (arr || [])) {
+      const fid = item.FacilityId != null ? String(item.FacilityId) : null;
+      const fname = item.FacilityName || item.Facility || item.FacilityName || item.Name || item.DisplayName || null;
+      if (!fid) continue;
+      if (!map.has(fid)) map.set(fid, String(fname || fid));
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  } catch (e) {
+    console.error('[gym] fetchFacilities error', e && (e.message || e));
+    return [];
+  }
+}
+
+async function getFacilityLive(facilityId) {
+  try {
+    const res = await axios.get(GYM_API_URL, { params: { AccountAPIKey: GYM_API_KEY }, timeout: 8000 });
+    let raw = res.data;
+    if (!raw) {
+      try {
+        const r2 = await axios.get(GYM_API_URL, { params: { AccountAPIKey: GYM_API_KEY }, timeout: 8000, responseType: 'text' });
+        const txt = r2.data;
+        if (txt) {
+          try { raw = JSON.parse(txt); } catch (e) { raw = txt; }
+        }
+      } catch (e) {
+        console.error('[gym] getFacilityLive fallback text error', e && e.message ? e.message : e);
+      }
+    }
+    const arr = Array.isArray(raw) ? raw : (raw && (raw.Data || raw.value || raw.facilities)) || [];
+    const lower = String(facilityId || '').toLowerCase();
+    const matches = (arr || []).filter(item => {
+      const fid = item.FacilityId != null ? String(item.FacilityId) : '';
+      const fname = String(item.FacilityName || item.Name || '').toLowerCase();
+      return fid === lower || fname === lower || fname.includes(lower);
+    });
+    if (!matches.length) return { count: null, updated: null, raw: arr };
+    const total = matches.reduce((s, it) => s + (Number(it.LastCount) || 0), 0);
+    const latest = matches.reduce((a, it) => {
+      const t = it.LastUpdatedDateAndTime || it.LastUpdated || it.Timestamp || null;
+      if (!t) return a;
+      try {
+        const da = new Date(a);
+        const dt = new Date(t);
+        return dt > da ? t : a;
+      } catch (_) { return a; }
+    }, matches[0].LastUpdatedDateAndTime || matches[0].LastUpdated || null);
+    const details = matches.map(m => ({ locationId: m.LocationId, name: m.LocationName, lastCount: m.LastCount, totalCapacity: m.TotalCapacity, isClosed: m.IsClosed }));
+    return { count: total, updated: latest, raw: { facility: matches[0].FacilityName, details } };
+  } catch (e) {
+    console.error('[gym] getFacilityLive error', e && (e.message || e));
+    return { count: null, updated: null, raw: null };
+  }
+}
 
 const JSON_FILE = path.resolve(__dirname, '../../gym_db.json');
 
@@ -416,4 +494,4 @@ async function promotePendingIfAny() {
   } catch (e) { console.error('[gym] migration startup error', e.message); }
 })();
 
-module.exports = { registerUser, getUser, recordCheck, scheduleDaily, finalizeRegistrationFromMessage, getPendingByMessage, sendCheckinNow, getAllUsers, setStreak, getPendingByUser, updatePendingSelection };
+module.exports = { registerUser, getUser, recordCheck, scheduleDaily, finalizeRegistrationFromMessage, getPendingByMessage, sendCheckinNow, getAllUsers, setStreak, getPendingByUser, updatePendingSelection, fetchFacilities, getFacilityLive };

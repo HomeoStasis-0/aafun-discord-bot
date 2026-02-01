@@ -2,11 +2,20 @@ const { Pool } = require('pg');
 const { BIRTHDAY_CHANNEL_ID } = require('../../config'); // fixed path
 const { EmbedBuilder } = require('discord.js');
 
-// PostgreSQL pool setup
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
+// PostgreSQL pool setup (guarded)
+let pool = null;
+try {
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+  });
+  pool.on('error', err => {
+    console.error('[birthdays] pg pool error:', err && err.message ? err.message : err);
+  });
+} catch (err) {
+  console.error('[birthdays] Failed to create pg pool:', err && err.message ? err.message : err);
+  pool = null;
+}
 
 // Interval in ms: 1 minute (for testing)
 const INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -73,10 +82,14 @@ async function sendBirthday(client, userId) {
 
 async function getBirthdaysFromDB() {
   try {
+    if (!pool) {
+      console.warn('[birthdays] No DB pool available, skipping fetch');
+      return [];
+    }
     const res = await pool.query('SELECT name AS userId, birthday FROM birthdays');
     return res.rows.map(row => `${row.userId}:${row.birthday.toISOString().slice(0, 10)}`);
   } catch (err) {
-    console.error('[birthdays] Error fetching from DB:', err.message || err);
+    console.error('[birthdays] Error fetching from DB:', err && err.message ? err.message : err);
     return [];
   }
 }

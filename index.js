@@ -13,3 +13,11 @@ client.login(DISCORD_TOKEN).then(() => {
 }).catch(err => {
   console.error('Discord login failed:', err);
 });
+
+// Top-level safety: log and continue on uncaught async errors to avoid process exit
+process.on('unhandledRejection', (reason) => {
+  console.error('[process] UnhandledRejection:', reason && reason.stack ? reason.stack : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[process] UncaughtException:', err && err.stack ? err.stack : err);
+});

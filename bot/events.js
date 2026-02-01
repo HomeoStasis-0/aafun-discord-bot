@@ -3,7 +3,7 @@ const chatCommand = require('./commands/chat');
 const gifsCommand = require('./commands/gifs');
 const restartCommand = require('./commands/restart');
 const clearCommand = require('./commands/clear');
-const summarizeCommand = require('./commands/summarize'); // new
+const summarizeCommand = require('./commands/summarize');
 const gymCommand = require('./commands/gym');
 const handleMessages = require('./utils/messages');
 const gymUtil = require('./utils/gym');
@@ -19,13 +19,30 @@ function registerEvents(client) {
   client.__aafunInstanceId = instanceId;
   console.log(`[events] Registering events (instance ${instanceId})`);
 
-  client.on('ready', () => {
-    console.log(`✅ Logged in as ${client.user.tag} (pid=${process.pid}, inst=${instanceId})`);
-    console.log('[events] messageCreate listeners:', client.listenerCount('messageCreate'));
-  scheduleBirthdayChecks(client);
-  // start gym daily posts
-  gymUtil.scheduleDaily(client);
-  });
+  // Handle client ready. Newer discord.js versions emit 'clientReady'.
+  // Bind the same handler to both events for backwards compatibility
+  // and guard to ensure it only runs once.
+  let _readyHandled = false;
+  const onClientReady = async () => {
+    if (_readyHandled) return;
+    _readyHandled = true;
+    try {
+      console.log(`✅ Logged in as ${client.user?.tag || '<unknown>'} (pid=${process.pid}, inst=${instanceId})`);
+      console.log('[events] messageCreate listeners:', client.listenerCount('messageCreate'));
+      // start birthday checks (only if DATABASE_URL present)
+      if (process.env.DATABASE_URL) {
+        try { scheduleBirthdayChecks(client); } catch (err) { console.error('[birthdays] schedule error:', err); }
+      } else {
+        console.warn('[birthdays] DATABASE_URL not set — skipping birthday scheduler');
+      }
+      // start gym daily posts
+      try { gymUtil.scheduleDaily(client); } catch (err) { console.error('[gym] scheduleDaily error:', err); }
+    } catch (err) {
+      console.error('[events] ready handler error:', err);
+    }
+  };
+
+  client.once('clientReady', onClientReady);
 
   client.on('interactionCreate', async interaction => {
     try {
