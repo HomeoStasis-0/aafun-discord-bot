@@ -133,13 +133,19 @@ module.exports = async function gymCommand(interaction, client) {
   if (sub === 'set_streak') {
     // Admin command to set a user's streak manually
     const caller = interaction.member;
-    if (!caller.permissions.has('ManageGuild')) return interaction.reply({ content: 'You do not have permission to set streaks.', ephemeral: true });
     const target = interaction.options.getUser('user');
     const value = interaction.options.getInteger('streak');
-    if (!target || typeof value !== 'number') return interaction.reply({ content: 'Usage: /gym set_streak user:@User streak:<number>', ephemeral: true });
+    if (typeof value !== 'number') return interaction.reply({ content: 'Usage: /gym set_streak [user:@User] streak:<number>', ephemeral: true });
+    // allow users to set their own streak; only allow setting others if caller has ManageGuild
+    const targetId = target ? target.id : userId;
+    if (target && target.id !== userId && !caller.permissions.has('ManageGuild')) {
+      return interaction.reply({ content: 'You do not have permission to set other users\' streaks.', ephemeral: true });
+    }
+    if (value < 0) return interaction.reply({ content: 'Streak must be >= 0.', ephemeral: true });
     try {
-      await gym.setStreak(target.id, value);
-      return interaction.reply({ content: `Set streak for <@${target.id}> to ${value}`, ephemeral: true });
+      await gym.setStreak(targetId, value);
+      if (targetId === userId) return interaction.reply({ content: `Your streak has been set to ${value}`, ephemeral: true });
+      return interaction.reply({ content: `Set streak for <@${targetId}> to ${value}`, ephemeral: true });
     } catch (err) {
       console.error('set_streak error', err);
       return interaction.reply({ content: 'Failed to set streak.', ephemeral: true });
