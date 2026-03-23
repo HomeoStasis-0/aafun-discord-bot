@@ -24,32 +24,47 @@ module.exports = async function gymCommand(interaction, client) {
 
   if (sub === 'register') {
     let deferred = false;
-    try { await interaction.deferReply({ ephemeral: true }); deferred = true; } catch (_) { deferred = false; }
-    const channel = interaction.channel;
-    const mapping = [ ['SU','🟥'], ['M','🟩'], ['T','🟦'], ['W','🟨'], ['TH','🟪'], ['F','🟫'], ['SA','⬜'] ];
-    const buttons = mapping.map(([day, emoji]) =>
-      new ButtonBuilder()
-        .setCustomId(`gym_day_${day}`)
-        .setLabel(`${emoji} ${day}`)
-        .setStyle(ButtonStyle.Secondary)
-    );
-    const doneButton = new ButtonBuilder()
-      .setCustomId('gym_done')
-      .setLabel('Done')
-      .setStyle(ButtonStyle.Success);
-    const row1 = new ActionRowBuilder().addComponents(buttons.slice(0,4));
-    const row2 = new ActionRowBuilder().addComponents(buttons.slice(4).concat([doneButton]));
-    const embed = new EmbedBuilder()
-      .setTitle('Gym Registration')
-      .setDescription('Click the buttons below to select the days you plan to go to the gym. When finished, click "Done".');
-    const msg = await channel.send({ content: `<@${userId}>`, embeds: [embed], components: [row1, row2] }).catch(() => null);
-    if (!msg) {
-      try { if (deferred) return interaction.editReply({ content: 'Unable to create registration message.' }); } catch (_) {}
-      return interaction.reply({ content: 'Unable to create registration message.', ephemeral: true });
+    try {
+      try { await interaction.deferReply({ ephemeral: true }); deferred = true; } catch (_) { deferred = false; }
+      const channel = interaction.channel;
+      if (!channel || !channel.isTextBased || !channel.isTextBased()) {
+        const txt = 'Registration only works in a text channel.';
+        try { if (deferred) return interaction.editReply({ content: txt }); } catch (_) {}
+        return interaction.reply({ content: txt, ephemeral: true });
+      }
+
+      const mapping = [ ['SU','🟥'], ['M','🟩'], ['T','🟦'], ['W','🟨'], ['TH','🟪'], ['F','🟫'], ['SA','⬜'] ];
+      const buttons = mapping.map(([day, emoji]) =>
+        new ButtonBuilder()
+          .setCustomId(`gym_day_${day}`)
+          .setLabel(`${emoji} ${day}`)
+          .setStyle(ButtonStyle.Secondary)
+      );
+      const doneButton = new ButtonBuilder()
+        .setCustomId('gym_done')
+        .setLabel('Done')
+        .setStyle(ButtonStyle.Success);
+      const row1 = new ActionRowBuilder().addComponents(buttons.slice(0,4));
+      const row2 = new ActionRowBuilder().addComponents(buttons.slice(4).concat([doneButton]));
+      const embed = new EmbedBuilder()
+        .setTitle('Gym Registration')
+        .setDescription('Click the buttons below to select the days you plan to go to the gym. When finished, click "Done".');
+
+      const msg = await channel.send({ content: `<@${userId}>`, embeds: [embed], components: [row1, row2] }).catch(() => null);
+      if (!msg) {
+        try { if (deferred) return interaction.editReply({ content: 'Unable to create registration message.' }); } catch (_) {}
+        return interaction.reply({ content: 'Unable to create registration message.', ephemeral: true });
+      }
+
+      await gym.registerUser(userId, null, msg.id);
+      try { if (deferred) return interaction.editReply({ content: `Registration message posted: ${msg.url}` }); } catch (_) {}
+      return interaction.reply({ content: `Registration message posted: ${msg.url}`, ephemeral: true });
+    } catch (err) {
+      console.error('[gym] register error', err);
+      const txt = 'Registration failed due to a storage error. Try again in a moment.';
+      try { if (deferred) return interaction.editReply({ content: txt }); } catch (_) {}
+      return interaction.reply({ content: txt, ephemeral: true }).catch(() => {});
     }
-    await gym.registerUser(userId, null, msg.id);
-    try { if (deferred) return interaction.editReply({ content: `Registration message posted: ${msg.url}` }); } catch (_) {}
-    return interaction.reply({ content: `Registration message posted: ${msg.url}`, ephemeral: true });
   }
 
   if (sub === 'status') {
@@ -195,7 +210,6 @@ module.exports = async function gymCommand(interaction, client) {
       const match = facilities.find(f => String(f.id).toLowerCase() === lower || String(f.name||'').toLowerCase() === lower || String(f.name||'').toLowerCase().includes(lower));
       const facilityIdToUse = match ? match.id : facilityArg;
       try {
-        await interaction.deferReply({ ephemeral: false }).catch(() => {});
         const live = await gym.getFacilityLive(facilityIdToUse);
         if (!live || (live.count === null && !live.raw)) return interaction.editReply({ content: 'Unable to fetch live data for that facility. Check `GYM_API_URL`/`GYM_API_KEY`.' });
         const title = match ? match.name : facilityIdToUse;

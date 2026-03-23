@@ -105,7 +105,10 @@ function registerEvents(client) {
           const doneBtn = new (require('discord.js').ButtonBuilder)().setCustomId('gym_done').setLabel('Done').setStyle(require('discord.js').ButtonStyle.Success);
           const row1 = new (require('discord.js').ActionRowBuilder)().addComponents(dayButtons.slice(0,4));
           const row2 = new (require('discord.js').ActionRowBuilder)().addComponents(dayButtons.slice(4).concat([doneBtn]));
-          const embed = interaction.message.embeds && interaction.message.embeds[0] ? interaction.message.embeds[0] : new (require('discord.js').EmbedBuilder)().setTitle('Gym Registration');
+          const { EmbedBuilder } = require('discord.js');
+          const existingEmbed = interaction.message.embeds && interaction.message.embeds[0] ? interaction.message.embeds[0] : null;
+          // message.embeds[0] is an Embed (read-only), so rebuild it as EmbedBuilder before mutating.
+          const embed = existingEmbed ? new EmbedBuilder(existingEmbed.data || existingEmbed) : new EmbedBuilder().setTitle('Gym Registration');
           embed.setDescription(`Selected days: ${selected.join(' ') || '_None_'}`);
           try {
             await interaction.message.edit({ embeds: [embed], components: [row1, row2] });
@@ -347,8 +350,13 @@ function registerEvents(client) {
       }
     } catch (err) {
       console.error('Interaction error:', err);
-      if (!interaction.replied) {
-        interaction.reply({ content: 'Unexpected error.', ephemeral: true }).catch(() => {});
+      const msg = { content: 'Unexpected error.', ephemeral: true };
+      if (interaction.deferred && !interaction.replied) {
+        interaction.editReply(msg).catch(() => {});
+      } else if (!interaction.deferred && !interaction.replied) {
+        interaction.reply(msg).catch(() => {});
+      } else {
+        interaction.followUp(msg).catch(() => {});
       }
     }
   });
