@@ -64,13 +64,15 @@ async function sendBirthday(client, userId) {
       return false;
     }
 
+    const mention = /^\d{15,25}$/.test(String(userId || '')) ? `<@${userId}>` : String(userId || 'Unknown user');
+
     const embed = new EmbedBuilder()
       .setTitle('🎉 Happy Birthday!')
-      .setDescription(`Happy Birthday <@${userId}>!`) 
+      .setDescription(`Happy Birthday ${mention}!`) 
       .setColor(0xffd700)
       .setImage('https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExMXBueGU3cnN1ZWUzeWpwYm5mb3kwaTYxdnplc3I1ajd1OTR6eGZiYSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Ca0pp3NF1B1jbp0a1A/giphy.gif');
 
-    await channel.send({ content: `<@${userId}>`, embeds: [embed] });
+    await channel.send({ content: mention, embeds: [embed] });
     console.log(`[birthdays] Sent birthday message for ${userId} to channel ${channelId}`);
     return true;
   } catch (err) {
@@ -86,8 +88,12 @@ async function getBirthdaysFromDB() {
       console.warn('[birthdays] No DB pool available, skipping fetch');
       return [];
     }
-    const res = await pool.query('SELECT name AS userId, birthday FROM birthdays');
-    return res.rows.map(row => `${row.userId}:${row.birthday.toISOString().slice(0, 10)}`);
+    const res = await pool.query('SELECT name, birthday FROM birthdays');
+    return res.rows.map(row => {
+      const rawUserId = row.userid || row.userId || row.name;
+      const birthday = row.birthday instanceof Date ? row.birthday : new Date(row.birthday);
+      return `${rawUserId}:${birthday.toISOString().slice(0, 10)}`;
+    });
   } catch (err) {
     console.error('[birthdays] Error fetching from DB:', err && err.message ? err.message : err);
     return [];
