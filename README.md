@@ -8,7 +8,6 @@ It does stuff like:
 - Spotify top tracks (with login)
 - Giphy/tenor GIFs (with some cursed fallbacks)
 - Birthday shoutouts (with GIFs)
-- Meme auto-replies (type "meow", "erm", "kys", etc)
 - `/restart` command for when things go sideways
 - `/clear` to wipe your chat memory with the bot
 - And whatever else I felt like adding at 2am
