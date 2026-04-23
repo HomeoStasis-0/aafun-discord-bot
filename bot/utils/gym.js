@@ -109,8 +109,8 @@ const JSON_FILE = path.resolve(__dirname, '../../gym_db.json');
 // Prefer DATABASE_URL (Postgres) when present, otherwise fall back to sqlite
 const DATABASE_URL = process.env.DATABASE_URL || null;
 
-// Postgres client
-let pgClient = null;
+// Postgres pool (more resilient than a singleton client on Heroku)
+let pgPool = null;
 let sqlite3, open, sqliteDb;
 
 function weekDayLetter(n) {
@@ -119,13 +119,23 @@ function weekDayLetter(n) {
 }
 
 async function ensurePostgres() {
-  if (pgClient) return pgClient;
-  const { Client } = require('pg');
-  const c = new Client({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } });
-  await c.connect();
-  pgClient = c;
+  if (pgPool) return pgPool;
+  const { Pool } = require('pg');
+  const p = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+    keepAlive: true
+  });
+  p.on('error', (err) => {
+    // Pool will replace bad clients automatically; log for observability.
+    console.error('[gym] postgres pool error:', err && err.message ? err.message : err);
+  });
+  pgPool = p;
   // create tables if not exists
-  await pgClient.query(`
+  await pgPool.query(`
     CREATE TABLE IF NOT EXISTS users (
       userId TEXT PRIMARY KEY,
       schedule TEXT,
@@ -134,14 +144,52 @@ async function ensurePostgres() {
       checks TEXT
     );
   `);
-  await pgClient.query(`
+  await pgPool.query(`
     CREATE TABLE IF NOT EXISTS pending (
       messageId TEXT PRIMARY KEY,
       userId TEXT,
       createdAt TEXT
     );
   `);
-  return pgClient;
+  return pgPool;
+}
+
+function isRetryablePgError(err) {
+  const code = err && err.code ? String(err.code) : '';
+  const msg = err && err.message ? String(err.message).toLowerCase() : '';
+  return [
+    '57P01', // admin_shutdown
+    '57P02', // crash_shutdown
+    '57P03', // cannot_connect_now
+    'ECONNRESET',
+    'EPIPE',
+    'ETIMEDOUT'
+  ].includes(code) ||
+  msg.includes('not queryable') ||
+  msg.includes('connection terminated') ||
+  msg.includes('terminating connection') ||
+  msg.includes('connection error');
+}
+
+async function resetPostgresPool() {
+  const oldPool = pgPool;
+  pgPool = null;
+  if (oldPool) {
+    try { await oldPool.end(); } catch (_) {}
+  }
+}
+
+async function queryPostgres(sql, params = []) {
+  const db = await ensurePostgres();
+  try {
+    return await db.query(sql, params);
+  } catch (err) {
+    if (!isRetryablePgError(err)) throw err;
+    console.warn('[gym] postgres transient error, retrying query once:', err.message || err);
+    await resetPostgresPool();
+    const freshDb = await ensurePostgres();
+    return freshDb.query(sql, params);
+  }
 }
 
 async function ensureSqlite() {
@@ -222,8 +270,7 @@ async function migrateFromJsonIfNeeded() {
 // CRUD helpers abstracted for both DBs
 async function runQuery(sql, params=[]) {
   if (DATABASE_URL) {
-    const db = await ensurePostgres();
-    return db.query(sql, params);
+    return queryPostgres(sql, params);
   } else {
     const db = await ensureSqlite();
     return db.run(sql, params);
@@ -232,8 +279,7 @@ async function runQuery(sql, params=[]) {
 
 async function getQuery(sql, params=[]) {
   if (DATABASE_URL) {
-    const db = await ensurePostgres();
-    const r = await db.query(sql, params);
+    const r = await queryPostgres(sql, params);
     return (r.rows && r.rows[0]) ? r.rows[0] : null;
   } else {
     const db = await ensureSqlite();
@@ -243,8 +289,7 @@ async function getQuery(sql, params=[]) {
 
 async function allQuery(sql, params=[]) {
   if (DATABASE_URL) {
-    const db = await ensurePostgres();
-    const r = await db.query(sql, params);
+    const r = await queryPostgres(sql, params);
     return r.rows || [];
   } else {
     const db = await ensureSqlite();
