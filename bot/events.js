@@ -5,6 +5,7 @@ const restartCommand = require('./commands/restart');
 const clearCommand = require('./commands/clear');
 const summarizeCommand = require('./commands/summarize');
 const gymCommand = require('./commands/gym');
+const birthdayCommand = require('./commands/birthday');
 const handleMessages = require('./utils/messages');
 const gymUtil = require('./utils/gym');
 const { scheduleBirthdayChecks } = require('./utils/birthdays');
@@ -54,7 +55,8 @@ function registerEvents(client) {
           restart: restartCommand,
           clear: clearCommand,
           summarize: summarizeCommand, // new
-          gym: gymCommand
+          gym: gymCommand,
+          birthday: birthdayCommand
         };
         const fn = map[interaction.commandName];
         if (!fn) return;

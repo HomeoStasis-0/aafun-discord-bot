@@ -137,4 +137,83 @@ function scheduleBirthdayChecks(client) {
   setInterval(() => run().catch(err => console.error('[birthdays] scheduled run error:', err)), INTERVAL_MS);
 }
 
-module.exports = { scheduleBirthdayChecks };
+async function addBirthdayToDB(userId, username, monthDay) {
+  try {
+    if (!pool) {
+      console.warn('[birthdays] No DB pool available, cannot add birthday');
+      return false;
+    }
+    
+    // Parse MM-DD into a date (use arbitrary year like 2000)
+    const parts = monthDay.split('-');
+    if (parts.length !== 2) return false;
+    
+    const month = Number(parts[0]);
+    const day = Number(parts[1]);
+    
+    // Create a date string in YYYY-MM-DD format for storage
+    const dateStr = `2000-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    // The name field stores the userId
+    const res = await pool.query(
+      `INSERT INTO birthdays (name, birthday) 
+       VALUES ($1, $2) 
+       ON CONFLICT (name) DO UPDATE 
+       SET birthday = EXCLUDED.birthday`,
+      [userId, dateStr]
+    );
+    
+    console.log(`[birthdays] Added/updated birthday for ${userId} (${username}): ${monthDay}`);
+    return true;
+  } catch (err) {
+    console.error('[birthdays] Error adding birthday to DB:', err && err.message ? err.message : err);
+    return false;
+  }
+}
+
+async function getAllBirthdaysFromDB() {
+  try {
+    if (!pool) {
+      console.warn('[birthdays] No DB pool available, skipping fetch');
+      return [];
+    }
+    
+    const res = await pool.query('SELECT name, birthday FROM birthdays ORDER BY birthday');
+    return res.rows.map(row => {
+      const birthday = row.birthday instanceof Date ? row.birthday : new Date(row.birthday);
+      const monthDay = formatMMDDFromDateObj(birthday);
+      return {
+        userId: row.name,
+        name: row.name,
+        monthDay: monthDay
+      };
+    });
+  } catch (err) {
+    console.error('[birthdays] Error fetching all birthdays from DB:', err && err.message ? err.message : err);
+    return [];
+  }
+}
+
+async function removeBirthdayFromDB(userId) {
+  try {
+    if (!pool) {
+      console.warn('[birthdays] No DB pool available, cannot remove birthday');
+      return false;
+    }
+    
+    const res = await pool.query('DELETE FROM birthdays WHERE name = $1', [userId]);
+    
+    if (res.rowCount === 0) {
+      console.log(`[birthdays] No birthday found for ${userId}`);
+      return false;
+    }
+    
+    console.log(`[birthdays] Removed birthday for ${userId}`);
+    return true;
+  } catch (err) {
+    console.error('[birthdays] Error removing birthday from DB:', err && err.message ? err.message : err);
+    return false;
+  }
+}
+
+module.exports = { scheduleBirthdayChecks, addBirthdayToDB, getAllBirthdaysFromDB, removeBirthdayFromDB };

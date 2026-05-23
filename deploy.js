@@ -138,6 +138,43 @@ const commands = [
         ]
       }
     ]
+  },
+  {
+    name: 'birthday',
+    description: 'Birthday management commands',
+    options: [
+      {
+        type: 1, // SUB_COMMAND
+        name: 'add',
+        description: 'Add your birthday to the database',
+        options: [
+          {
+            name: 'date',
+            type: 3, // STRING
+            description: 'Your birthday (MM-DD, MM/DD, or MM-DD-YYYY format)',
+            required: true,
+          },
+        ],
+      },
+      {
+        type: 1, // SUB_COMMAND
+        name: 'list',
+        description: 'List all registered birthdays',
+      },
+      {
+        type: 1, // SUB_COMMAND
+        name: 'remove',
+        description: 'Remove a user\'s birthday (admin only)',
+        options: [
+          {
+            name: 'user',
+            type: 6, // USER
+            description: 'User whose birthday to remove',
+            required: true,
+          },
+        ],
+      },
+    ],
   }
 ];
 
