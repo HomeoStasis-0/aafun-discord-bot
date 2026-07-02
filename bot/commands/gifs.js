@@ -12,7 +12,7 @@ const FALLBACKS = {
   chad: 'https://tenor.com/view/gigachad-chad-gif-20773266',
   cringe: 'https://tenor.com/view/cringe-gif-21464576',
   nah: 'https://tenor.com/view/nah-id-win-jjk-gif-8888717316917975261',
-  bruh: 'https://tenor.com/view/bruh-gif-21934518'
+  bruh: 'https://tenor.com/view/bruh-gif-21934518',
 };
 
 async function ensureDeferred(interaction) {

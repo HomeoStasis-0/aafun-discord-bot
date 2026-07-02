@@ -12,6 +12,7 @@ const meowOther = [
   'https://tenor.com/view/silly-reaction-meme-stan-twitter-funny-stressed-gif-7713976294327515532',
   'https://tenor.com/view/cat-cat-with-tongue-cat-smiling-gif-11949735780193730026',
   'https://tenor.com/view/cat-orange-cat-laughing-aaaa-gif-4465510619613777157',
+  'https://giphy.com/gifs/socks-in-room-send-this-to-someone-who-loves-cats-FTsXnBHwqjAzdZrBOb'
 ];
 
 const MATCHERS = [
