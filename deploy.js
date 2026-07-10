@@ -6,6 +6,8 @@ const commands = [
   {
     name: 'chat',
     description: 'Chat with the bot',
+    integration_types: [0, 1],
+    contexts: [0, 1, 2],
     options: [
       {
         name: 'message',
