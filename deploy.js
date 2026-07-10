@@ -20,10 +20,14 @@ const commands = [
   {
     name: 'clear',
     description: 'Clear your chat memory',
+    integration_types: [0, 1],
+    contexts: [0, 1, 2],
   },
   {
     name: 'spotify',
     description: 'Spotify commands',
+    integration_types: [0, 1],
+    contexts: [0, 1, 2],
     options: [
       {
         type: 1, // SUB_COMMAND
@@ -40,10 +44,14 @@ const commands = [
   {
     name: 'restart',
     description: 'Restart the bot',
+    integration_types: [0, 1],
+    contexts: [0, 1, 2],
   },
   {
     name: 'randomgif',
     description: 'Get a random GIF from Giphy',
+    integration_types: [0, 1],
+    contexts: [0, 1, 2],
     options: [
       {
         name: 'search',
@@ -56,6 +64,8 @@ const commands = [
   {
     name: 'summarize',
     description: 'Summarize recent chat in this channel',
+    integration_types: [0, 1],
+    contexts: [0, 1, 2],
     options: [
       {
         name: 'minutes',
@@ -74,6 +84,8 @@ const commands = [
   {
     name: 'gym',
     description: 'Gym streak commands',
+    integration_types: [0, 1],
+    contexts: [0, 1, 2],
     options: [
       {
         type: 1, // SUB_COMMAND
@@ -144,6 +156,8 @@ const commands = [
   {
     name: 'birthday',
     description: 'Birthday management commands',
+    integration_types: [0, 1],
+    contexts: [0, 1, 2],
     options: [
       {
         type: 1, // SUB_COMMAND
