@@ -44,8 +44,8 @@ const commands = [
   {
     name: 'restart',
     description: 'Restart the bot',
-    integration_types: [0, 1],
-    contexts: [0, 1, 2],
+    integration_types: [0],
+    contexts: [0],
   },
   {
     name: 'randomgif',
@@ -64,8 +64,8 @@ const commands = [
   {
     name: 'summarize',
     description: 'Summarize recent chat in this channel',
-    integration_types: [0, 1],
-    contexts: [0, 1, 2],
+    integration_types: [0],
+    contexts: [0],
     options: [
       {
         name: 'minutes',
@@ -156,8 +156,8 @@ const commands = [
   {
     name: 'birthday',
     description: 'Birthday management commands',
-    integration_types: [0, 1],
-    contexts: [0, 1, 2],
+    integration_types: [0],
+    contexts: [0],
     options: [
       {
         type: 1, // SUB_COMMAND
