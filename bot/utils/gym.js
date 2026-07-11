@@ -26,6 +26,7 @@ const path = require('path');
 const { GYM_CHANNEL_ID, GYM_ROLE_ID } = require('../../config');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const axios = require('axios');
+const CHICAGO_TZ = 'America/Chicago';
 
 // HTTP helpers for facility/live counters
 const GYM_API_KEY = process.env.GYM_API_KEY || '99563b55-ae4f-4001-b384-648e0ebeaeb5';
@@ -116,6 +117,51 @@ let sqlite3, open, sqliteDb;
 function weekDayLetter(n) {
   const letters = ['SU','M','T','W','TH','F','SA'];
   return letters[n];
+}
+
+function ctNow() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: CHICAGO_TZ }));
+}
+
+function toCtDate(date) {
+  return new Date(new Date(date).toLocaleString('en-US', { timeZone: CHICAGO_TZ }));
+}
+
+function ctDateKey(date) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: CHICAGO_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
+}
+
+function isGymSendWindow(dateCT) {
+  const h = dateCT.getHours();
+  // Allow catch-up sends later in the morning if the process missed exactly 8:00.
+  return h >= 8 && h < 12;
+}
+
+async function alreadyPostedCheckinToday(channel, client, dateCT) {
+  if (!channel || !channel.messages || typeof channel.messages.fetch !== 'function') return false;
+  const targetDate = ctDateKey(dateCT);
+  const me = client && client.user ? client.user.id : null;
+  let before;
+
+  // Scan a bounded recent history window to avoid duplicate daily prompts.
+  for (let i = 0; i < 3; i += 1) {
+    const page = await channel.messages.fetch({ limit: 50, before }).catch(() => null);
+    if (!page || page.size === 0) break;
+    for (const msg of page.values()) {
+      if (me && msg.author && msg.author.id !== me) continue;
+      if (!msg.content || !msg.content.includes('Did you hit the gym today?')) continue;
+      if (ctDateKey(msg.createdAt) === targetDate) return true;
+    }
+    before = page.last() ? page.last().id : null;
+    if (!before) break;
+  }
+
+  return false;
 }
 
 async function ensurePostgres() {
@@ -362,7 +408,7 @@ async function getAllUsers() {
 
 async function recordCheck(userId, dateStr, success) {
   // compute date and weekday in America/Chicago to match scheduled posts
-  const ct = new Date((new Date(dateStr)).toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+  const ct = toCtDate(dateStr);
   const d = ct.toISOString().slice(0,10);
   const day = ct.getDay();
   const letter = weekDayLetter(day);
@@ -413,9 +459,7 @@ async function resetWeekly() {
 
 async function checkMissedForDate(date) {
   // compute date/day in America/Chicago timezone to match scheduled posts
-  const ct = (date instanceof Date)
-    ? new Date(date.toLocaleString('en-US', { timeZone: 'America/Chicago' }))
-    : new Date((new Date(date)).toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+  const ct = toCtDate(date);
   const d = ct.toISOString().slice(0,10);
   const day = ct.getDay();
   const letter = weekDayLetter(day);
@@ -431,15 +475,15 @@ async function checkMissedForDate(date) {
 }
 
 function scheduleDaily(client) {
-  function ctNow() {
-    const s = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' });
-    return new Date(s);
-  }
+  let lastHandledDate = null;
 
   async function runForDate(dateCT) {
     try {
       const channel = await client.channels.fetch(GYM_CHANNEL_ID).catch(() => null);
       if (!channel) return;
+      if (await alreadyPostedCheckinToday(channel, client, dateCT)) {
+        return 'already-posted';
+      }
       const yesterday = new Date(dateCT);
       yesterday.setDate(yesterday.getDate() - 1);
       await checkMissedForDate(yesterday);
@@ -451,25 +495,31 @@ function scheduleDaily(client) {
         new ButtonBuilder().setCustomId(`gym_no_${letter}_${Date.now()}`).setLabel('No').setStyle(ButtonStyle.Danger)
       );
       await channel.send({ content: `<@&${GYM_ROLE_ID}> Did you hit the gym today? (${letter})`, components: [row], allowedMentions: { roles: [GYM_ROLE_ID] } });
+      return 'sent';
     } catch (err) {
       console.error('Gym schedule error:', err.message);
+      return 'error';
     }
   }
 
-  function scheduleNext() {
+  async function tick() {
     const nowCT = ctNow();
-    const next = new Date(nowCT);
-    next.setHours(8, 0, 0, 0);
-    if (nowCT >= next) next.setDate(next.getDate() + 1);
-    const delay = next - nowCT;
-    setTimeout(async () => {
-      const dateCT = ctNow();
-      await runForDate(dateCT);
-      scheduleNext();
-    }, delay);
+    if (!isGymSendWindow(nowCT)) return;
+
+    const dateKey = ctDateKey(nowCT);
+    if (lastHandledDate === dateKey) return;
+
+    const status = await runForDate(nowCT);
+    if (status === 'sent' || status === 'already-posted') {
+      lastHandledDate = dateKey;
+    }
   }
 
-  scheduleNext();
+  console.log('[gym] daily scheduler active (CT 08:00-11:59 window)');
+  tick().catch(err => console.error('[gym] initial scheduler tick error:', err));
+  setInterval(() => {
+    tick().catch(err => console.error('[gym] scheduler tick error:', err));
+  }, 60 * 1000);
 }
 
 async function sendCheckinNow(client) {
