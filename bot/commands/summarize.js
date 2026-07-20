@@ -124,6 +124,23 @@ async function summarizeText(text, minutes) {
   return resp.choices?.[0]?.message?.content || 'No summary generated.';
 }
 
+async function condenseText(text, minutes) {
+  const system = {
+    role: 'system',
+    content: 'You are a context condenser for Discord chat logs. Produce a 2-4 sentence concise context summary suitable as input context for a summarizer. Be as compact as possible while preserving key topics and participants.'
+  };
+  const userMsg = {
+    role: 'user',
+    content: `Condense the following chat history (last ${minutes} minutes) into a short context of 1-3 sentences:\n\n${text}`
+  };
+  const resp = await groq.chat.completions.create({
+    model: 'openai/gpt-oss-20b',
+    messages: [system, userMsg],
+    max_tokens: 150
+  });
+  return resp.choices?.[0]?.message?.content || null;
+}
+
 module.exports = async function summarize(interaction, client) {
   const ok = await ensureDeferred(interaction);
   if (!ok) {
@@ -202,7 +219,26 @@ module.exports = async function summarize(interaction, client) {
 
     let summary;
     try {
-      summary = await summarizeText(chatText, minutes);
+      // If the chat text is very large, ask the model to condense it first to reduce token usage.
+      let inputForSummary = chatText;
+      const LARGE_TEXT_THRESHOLD = 20_000; // characters
+      if (chatText.length > LARGE_TEXT_THRESHOLD) {
+        try {
+          const condensed = await condenseText(chatText, minutes);
+          if (condensed && condensed.length < chatText.length) {
+            console.log('[summarize] used condensed context to reduce token usage');
+            inputForSummary = condensed;
+          } else {
+            console.warn('[summarize] condense returned empty or longer result, falling back to truncated chatText');
+            inputForSummary = chatText.slice(Math.max(0, chatText.length - 100_000));
+          }
+        } catch (condErr) {
+          console.warn('Condense attempt failed, falling back to truncated chatText:', condErr?.message || condErr);
+          inputForSummary = chatText.slice(Math.max(0, chatText.length - 100_000));
+        }
+      }
+
+      summary = await summarizeText(inputForSummary, minutes);
     } catch (err) {
       console.error('Summarize attempt failed, trying truncated input:', err.message);
       const truncated = chatText.slice(Math.max(0, chatText.length - 100_000));

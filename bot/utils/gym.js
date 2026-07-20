@@ -239,32 +239,14 @@ async function queryPostgres(sql, params = []) {
 }
 
 async function ensureSqlite() {
-  if (sqliteDb) return sqliteDb;
-  sqlite3 = require('sqlite3').verbose();
-  open = require('sqlite').open;
-  sqliteDb = await open({ filename: path.resolve(__dirname, '../../gym_db.sqlite'), driver: sqlite3.Database });
-  await sqliteDb.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      userId TEXT PRIMARY KEY,
-      schedule TEXT,
-      streak INTEGER DEFAULT 0,
-      lastCheck TEXT,
-      checks TEXT
-    );
-  `);
-  await sqliteDb.exec(`
-    CREATE TABLE IF NOT EXISTS pending (
-      messageId TEXT PRIMARY KEY,
-      userId TEXT,
-      createdAt TEXT
-    );
-  `);
-  return sqliteDb;
+  throw new Error('Sqlite fallback disabled. Set DATABASE_URL to use Postgres.');
 }
 
 async function ensureDb() {
-  if (DATABASE_URL) return ensurePostgres();
-  return ensureSqlite();
+  if (!DATABASE_URL) {
+    throw new Error('DATABASE_URL must be set; sqlite fallback has been disabled.');
+  }
+  return ensurePostgres();
 }
 
 // Migration: read gym_db.json and insert into whichever DB is active
@@ -274,73 +256,41 @@ async function migrateFromJsonIfNeeded() {
   let j = {};
   try { j = JSON.parse(raw); } catch (e) { console.error('[gym] invalid JSON file', e.message); return; }
 
-  if (DATABASE_URL) {
-    const db = await ensurePostgres();
-    const r = await db.query('SELECT COUNT(1) as c FROM users');
-    const c = (r && r.rows && r.rows[0]) ? parseInt(r.rows[0].c,10) : 0;
-    if (c === 0 && j.users) {
-      for (const [uid, data] of Object.entries(j.users)) {
-        await db.query('INSERT INTO users (userId, schedule, streak, lastCheck, checks) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (userId) DO UPDATE SET schedule=EXCLUDED.schedule, streak=EXCLUDED.streak, lastCheck=EXCLUDED.lastcheck, checks=EXCLUDED.checks', [uid, JSON.stringify(data.schedule||[]), data.streak||0, data.lastCheck||null, JSON.stringify(data.checks||{})]);
-      }
-      console.log('[gym] migrated users from gym_db.json to postgres');
+  if (!DATABASE_URL) {
+    console.log('[gym] DATABASE_URL not set; skipping migration from gym_db.json');
+    return;
+  }
+
+  const db = await ensurePostgres();
+  const r = await db.query('SELECT COUNT(1) as c FROM users');
+  const c = (r && r.rows && r.rows[0]) ? parseInt(r.rows[0].c,10) : 0;
+  if (c === 0 && j.users) {
+    for (const [uid, data] of Object.entries(j.users)) {
+      await db.query('INSERT INTO users (userId, schedule, streak, lastCheck, checks) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (userId) DO UPDATE SET schedule=EXCLUDED.schedule, streak=EXCLUDED.streak, lastCheck=EXCLUDED.lastcheck, checks=EXCLUDED.checks', [uid, JSON.stringify(data.schedule||[]), data.streak||0, data.lastCheck||null, JSON.stringify(data.checks||{})]);
     }
-    if (j.pending) {
-      for (const [mid, pending] of Object.entries(j.pending)) {
-        await db.query('INSERT INTO pending (messageId, userId, createdAt) VALUES ($1,$2,$3) ON CONFLICT (messageId) DO NOTHING', [mid, pending.userId, pending.createdAt]);
-      }
-      console.log('[gym] migrated pending from gym_db.json to postgres');
+    console.log('[gym] migrated users from gym_db.json to postgres');
+  }
+  if (j.pending) {
+    for (const [mid, pending] of Object.entries(j.pending)) {
+      await db.query('INSERT INTO pending (messageId, userId, createdAt) VALUES ($1,$2,$3) ON CONFLICT (messageId) DO NOTHING', [mid, pending.userId, pending.createdAt]);
     }
-  } else {
-    const db = await ensureSqlite();
-    const row = await db.get('SELECT COUNT(1) as c FROM users');
-    const c = row ? row.c : 0;
-    if (c === 0 && j.users) {
-      const insert = await db.prepare('INSERT OR REPLACE INTO users (userId, schedule, streak, lastCheck, checks) VALUES (?, ?, ?, ?, ?)');
-      for (const [uid, data] of Object.entries(j.users)) {
-        await insert.run(uid, JSON.stringify(data.schedule || []), data.streak || 0, data.lastCheck || null, JSON.stringify(data.checks || {}));
-      }
-      await insert.finalize();
-      console.log('[gym] migrated users from gym_db.json to sqlite');
-    }
-    if (j.pending) {
-      const pinsert = await db.prepare('INSERT OR REPLACE INTO pending (messageId, userId, createdAt) VALUES (?, ?, ?)');
-      for (const [mid, pending] of Object.entries(j.pending)) {
-        await pinsert.run(mid, pending.userId, pending.createdAt);
-      }
-      await pinsert.finalize();
-      console.log('[gym] migrated pending from gym_db.json to sqlite');
-    }
+    console.log('[gym] migrated pending from gym_db.json to postgres');
   }
 }
 
 // CRUD helpers abstracted for both DBs
 async function runQuery(sql, params=[]) {
-  if (DATABASE_URL) {
-    return queryPostgres(sql, params);
-  } else {
-    const db = await ensureSqlite();
-    return db.run(sql, params);
-  }
+  return queryPostgres(sql, params);
 }
 
 async function getQuery(sql, params=[]) {
-  if (DATABASE_URL) {
-    const r = await queryPostgres(sql, params);
-    return (r.rows && r.rows[0]) ? r.rows[0] : null;
-  } else {
-    const db = await ensureSqlite();
-    return db.get(sql, params);
-  }
+  const r = await queryPostgres(sql, params);
+  return (r.rows && r.rows[0]) ? r.rows[0] : null;
 }
 
 async function allQuery(sql, params=[]) {
-  if (DATABASE_URL) {
-    const r = await queryPostgres(sql, params);
-    return r.rows || [];
-  } else {
-    const db = await ensureSqlite();
-    return db.all(sql, params);
-  }
+  const r = await queryPostgres(sql, params);
+  return r.rows || [];
 }
 
 async function registerUser(userId, days, messageId) {
