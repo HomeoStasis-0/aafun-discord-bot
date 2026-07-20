@@ -76,11 +76,11 @@ async function ensureDeferred(interaction) {
   }
 }
 
-async function fetchRecentMessages(channel, minutes, maxMessages = 1000) {
+async function fetchRecentMessages(channel, minutes) {
   const cutoff = Date.now() - minutes * 60 * 1000;
   const collected = [];
   let lastId;
-  while (collected.length < maxMessages) {
+  while (true) {
     const options = { limit: 100 };
     if (lastId) options.before = lastId;
     const batch = await channel.messages.fetch(options);
