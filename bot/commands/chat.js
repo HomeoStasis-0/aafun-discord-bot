@@ -2,6 +2,8 @@ const { createChatCompletion } = require('../utils/ai');
 const memory = {};
 const MAX_MEMORY = 10;
 const MAX_TOOL_ROUNDS = 3;
+const MAX_REFUSAL_RETRIES = 2;
+const REFUSAL_PATTERN = /^(i'?m sorry,? but i (can'?t|cannot|can not) (help|assist)|i (can'?t|cannot|can not) (help|assist) with (that|this))/i;
 const groq = require('../utils/groqClient');
 const { webSearch, SearchQuotaExceededError } = require('../utils/search');
 
@@ -67,6 +69,7 @@ module.exports = async function chat(interaction, client) {
   try {
     const working = [buildSystemPrompt(), ...memory[userId]];
     let finalMessage = null;
+    let refusalRetries = 0;
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const resp = await groq.chat.completions.create({
@@ -96,6 +99,12 @@ module.exports = async function chat(interaction, client) {
           }
           working.push({ role: 'tool', tool_call_id: call.id, content: result });
         }
+        continue;
+      }
+
+      if (REFUSAL_PATTERN.test((message.content || '').trim()) && refusalRetries < MAX_REFUSAL_RETRIES) {
+        refusalRetries++;
+        round--;
         continue;
       }
 
