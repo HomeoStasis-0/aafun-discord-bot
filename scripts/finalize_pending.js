@@ -1,6 +1,6 @@
 // scripts/finalize_pending.js
 // Promote all pending rows into users table with empty schedule, then remove the pending rows.
-// Use with: heroku run node scripts/finalize_pending.js --app aafun-discord-app
+// Use with: node scripts/finalize_pending.js (with DATABASE_URL set)
 
 const { Client } = require('pg');
 

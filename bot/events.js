@@ -1,7 +1,6 @@
 const spotifyCommand = require('./commands/spotify');
 const chatCommand = require('./commands/chat');
 const gifsCommand = require('./commands/gifs');
-const restartCommand = require('./commands/restart');
 const clearCommand = require('./commands/clear');
 const summarizeCommand = require('./commands/summarize');
 const gymCommand = require('./commands/gym');
@@ -52,7 +51,6 @@ function registerEvents(client) {
           spotify: spotifyCommand,
           chat: chatCommand,
           randomgif: gifsCommand,
-          restart: restartCommand,
           clear: clearCommand,
           summarize: summarizeCommand, // new
           gym: gymCommand,

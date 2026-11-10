@@ -1,7 +1,7 @@
 {
-  "name": "js-getting-started",
+  "name": "aafun-discord-bot",
   "private": true,
-  "description": "A sample Node.js app using Express",
+  "description": "A Discord bot for my friends and I",
   "engines": {
     "node": "18.x || 20.x || 22.x"
   },
@@ -31,20 +31,7 @@
   "devDependencies": {
     "jest": "^29.7.0"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/heroku/node-js-getting-started.git"
-  },
-  "keywords": [
-    "node",
-    "heroku",
-    "express"
-  ],
   "license": "MIT",
   "version": "1.0.0",
-  "author": "",
-  "bugs": {
-    "url": "https://github.com/heroku/node-js-getting-started/issues"
-  },
-  "homepage": "https://github.com/heroku/node-js-getting-started#readme"
+  "author": ""
 }

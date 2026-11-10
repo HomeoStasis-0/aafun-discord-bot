@@ -8,7 +8,6 @@ It does stuff like:
 - Spotify top tracks (with login)
 - Giphy/tenor GIFs (with some cursed fallbacks)
 - Birthday shoutouts (with GIFs)
-- `/restart` command for when things go sideways
 - `/clear` to wipe your chat memory with the bot
 - And whatever else I felt like adding at 2am
 
@@ -42,7 +41,6 @@ GIPHY_API_KEY=your_giphy_key
 - `/spotify toptracks` — Get your top 5 tracks
 - `/randomgif [search]` — Get a random GIF (or type "rick", "meow", etc for surprises)
 - `/clear` — Clear your chat memory with the bot
-- `/restart` — Restarts the bot (Heroku only, don't abuse it)
 - ...and more
 
 ## Funky Features

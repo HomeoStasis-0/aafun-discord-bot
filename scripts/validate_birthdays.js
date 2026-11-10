@@ -1,6 +1,6 @@
 // scripts/validate_birthdays.js
-// Validate the birthdays table in the Heroku Postgres database.
-// Use with: heroku run node scripts/validate_birthdays.js --app aafun-discord-app
+// Validate the birthdays table in the Postgres database.
+// Use with: node scripts/validate_birthdays.js (with DATABASE_URL set)
 
 const { Client } = require('pg');
 

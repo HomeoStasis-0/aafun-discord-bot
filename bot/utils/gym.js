@@ -110,7 +110,7 @@ const JSON_FILE = path.resolve(__dirname, '../../gym_db.json');
 // Prefer DATABASE_URL (Postgres) when present, otherwise fall back to sqlite
 const DATABASE_URL = process.env.DATABASE_URL || null;
 
-// Postgres pool (more resilient than a singleton client on Heroku)
+// Postgres pool (more resilient than a singleton client)
 let pgPool = null;
 let sqlite3, open, sqliteDb;
 

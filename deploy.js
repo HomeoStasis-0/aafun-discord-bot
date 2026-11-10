@@ -42,12 +42,6 @@ const commands = [
     ],
   },
   {
-    name: 'restart',
-    description: 'Restart the bot',
-    integration_types: [0],
-    contexts: [0],
-  },
-  {
     name: 'randomgif',
     description: 'Get a random GIF from Giphy',
     integration_types: [0, 1],
